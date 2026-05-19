@@ -1,0 +1,28 @@
+resources:
+  jobs:
+    position_generate:
+      name: "[clarksons-demo] 20 position generate (long-running)"
+      description: |
+        Synthetic AIS generator: ports → searoute → fleet → stepper. Runs
+        continuously for `max_runtime_minutes` of wall-clock, writing
+        newline-JSON to the landing volume where the streaming Auto Loader
+        picks it up.
+      tasks:
+        - task_key: generate_ais
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: ../../notebooks/20_positions/generate_ais.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              volume: ${var.volume}
+              seed: ${var.seed}
+              n_vessels: ${var.n_vessels}
+              sim_speedup: ${var.sim_speedup}
+              lateness_pct: ${var.lateness_pct}
+              lateness_max_hours: ${var.lateness_max_hours}
+              gps_jitter_m: ${var.gps_jitter_m}
+              dropout_pct: ${var.dropout_pct}
+              workspace_files_path: ${workspace.file_path}
+              max_runtime_minutes: ${var.max_runtime_minutes}
+              reset_state: ${var.reset_state}

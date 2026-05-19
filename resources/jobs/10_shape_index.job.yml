@@ -1,0 +1,27 @@
+resources:
+  jobs:
+    shape_index:
+      name: "[clarksons-demo] 10 shape index"
+      description: |
+        Build the shape_cells table via h3_tessellateaswkb against shapes_raw.
+        Per-shape target_res chosen by `target_res_strategy` (category or area).
+      tasks:
+        - task_key: pick_target_res
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: ../../notebooks/10_shapes/pick_target_res.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              target_res_strategy: ${var.target_res_strategy}
+              quarantine_wkb_bytes: ${var.quarantine_wkb_bytes}
+
+        - task_key: build_shape_cells
+          depends_on:
+            - task_key: pick_target_res
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: ../../notebooks/10_shapes/build_shape_cells.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}

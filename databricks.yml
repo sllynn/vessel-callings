@@ -1,0 +1,108 @@
+bundle:
+  name: clarksons-demo
+
+include:
+  - resources/*.yml
+  - resources/jobs/*.yml
+  - resources/dashboards/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for all demo objects
+    default: stuart
+  schema:
+    description: Schema under the catalog
+    default: clarksons
+  volume:
+    description: UC Volume name for landing files (AIS landing, raw shape parquet)
+    default: landing
+  cluster_id:
+    description: Existing all-purpose cluster used for interactive notebook work
+    default: 0519-163942-gq1rcl9r
+
+  # --- generator knobs ---
+  seed:
+    description: Master random seed for the synthetic AIS generator (determinism)
+    default: "20260519"
+  n_vessels:
+    description: Number of vessels in the synthetic fleet
+    default: "500"
+  sim_speedup:
+    description: Sim-time / wall-time ratio (60 = 1 min real per 1 h sim)
+    default: "60"
+  lateness_pct:
+    description: Percentage of records held back to simulate late arrivals
+    default: "5"
+  lateness_max_hours:
+    description: Maximum delay applied to late-arrival records
+    default: "6"
+  gps_jitter_m:
+    description: Gaussian GPS noise standard deviation in metres
+    default: "10"
+  dropout_pct:
+    description: Percentage of records silently dropped
+    default: "0.5"
+
+  # --- indexing knobs ---
+  position_res:
+    description: H3 resolution for indexing vessel positions (finest target_res in shapes)
+    default: "8"
+  target_res_strategy:
+    description: How to assign target_res to shapes (category | area)
+    default: category
+
+  # --- callings MERGE knobs ---
+  merge_trigger_seconds:
+    description: Streaming micro-batch cadence for the callings MERGE in seconds
+    default: "30"
+  watermark_hours:
+    description: Streaming watermark window in hours (must cover lateness_max_hours)
+    default: "6"
+  bitemporal:
+    description: Whether the callings table carries valid_from/valid_to as well as as_of_ts
+    default: "true"
+  gap_minutes:
+    description: Sim-time gap above which consecutive matches become a new calling
+    default: "5"
+  max_runtime_minutes:
+    description: Wall-clock cap on the long-running generator job
+    default: "240"
+  reset_state:
+    description: When true, streaming notebooks drop their target tables and clear checkpoints on startup
+    default: "false"
+
+  warehouse_id:
+    description: SQL Warehouse for the Lakeview dashboard (set when we provision one)
+    default: ""
+
+  quarantine_wkb_bytes:
+    description: |
+      Any shape whose post-simplify WKB exceeds this byte threshold is
+      tessellation-quarantined and skipped by build_shape_cells. ~16 bytes
+      per vertex, so 500_000 ≈ 31k-vertex polygon. Tune up if you want to
+      attempt larger shapes; set 0 to disable automatic quarantine.
+    default: "500000"
+
+targets:
+  dev:
+    default: true
+    # Deliberately NOT using `mode: development` — its dev-mode mutator
+    # prefixes every resource with [dev <user>] / dev_<user>_, and Stuart
+    # owns the `stuart` catalog so he wants the bare schema `clarksons`.
+    workspace:
+      host: https://adb-984752964297111.11.azuredatabricks.net
+    run_as:
+      user_name: stuart.lynn@databricks.com
+    presets:
+      tags:
+        owner: stuart.lynn@databricks.com
+        project: clarksons-demo
+
+  # placeholder for the formal QBR target; currently identical to dev
+  qbr:
+    mode: production
+    workspace:
+      host: https://adb-984752964297111.11.azuredatabricks.net
+      root_path: /Workspace/Shared/clarksons-demo/qbr
+    run_as:
+      user_name: stuart.lynn@databricks.com

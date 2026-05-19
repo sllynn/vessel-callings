@@ -1,0 +1,49 @@
+# Named ports for the synthetic AIS generator (BRIEF.md §7 #5).
+# Coordinates are approximate seaward entry points; searoute snaps them to its
+# own nearest network port at routing time.
+
+ports:
+  - name: Rotterdam
+    lon: 4.13
+    lat: 51.95
+    region: north_sea
+
+  - name: Felixstowe
+    lon: 1.30
+    lat: 51.95
+    region: north_sea
+
+  - name: Aberdeen
+    lon: -2.08
+    lat: 57.14
+    region: north_sea
+
+  - name: Hamburg
+    lon: 9.95
+    lat: 53.55
+    region: north_sea
+
+  - name: Lisbon
+    lon: -9.13
+    lat: 38.70
+    region: atlantic_iberian
+
+  - name: Gibraltar
+    lon: -5.35
+    lat: 36.14
+    region: mediterranean_west
+
+  - name: New York
+    lon: -74.00
+    lat: 40.50
+    region: north_atlantic_west
+
+  - name: Suez-Med
+    lon: 32.34
+    lat: 31.27
+    region: mediterranean_east
+
+  - name: Singapore
+    lon: 103.85
+    lat: 1.27
+    region: south_china_sea

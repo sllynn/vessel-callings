@@ -1,0 +1,28 @@
+{
+  "cluster_name": "Clarksons demo - stuart.lynn",
+  "spark_version": "18.2.x-scala2.13",
+  "runtime_engine": "PHOTON",
+  "data_security_mode": "SINGLE_USER",
+  "single_user_name": "stuart.lynn@databricks.com",
+  "node_type_id": "Standard_D4ds_v5",
+  "driver_node_type_id": "Standard_D4ds_v5",
+  "num_workers": 2,
+  "autotermination_minutes": 120,
+  "enable_elastic_disk": true,
+  "enable_local_disk_encryption": false,
+  "azure_attributes": {
+    "availability": "SPOT_WITH_FALLBACK_AZURE",
+    "first_on_demand": 1,
+    "spot_bid_max_price": -1
+  },
+  "driver_node_type_flexibility": {
+    "alternate_node_type_ids": ["Standard_D4ads_v5", "Standard_D4ds_v4"]
+  },
+  "worker_node_type_flexibility": {
+    "alternate_node_type_ids": ["Standard_D4ads_v5", "Standard_D4ds_v4"]
+  },
+  "custom_tags": {
+    "owner": "stuart.lynn@databricks.com",
+    "project": "clarksons-demo"
+  }
+}

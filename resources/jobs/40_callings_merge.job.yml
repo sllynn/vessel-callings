@@ -1,0 +1,49 @@
+resources:
+  jobs:
+    reset_streaming_state:
+      name: "[clarksons-demo] 00 reset_streaming_state (one-shot)"
+      description: Drops bronze/silver/matches/callings tables and clears all streaming checkpoints. Static shapes_raw/shape_cells are untouched.
+      tasks:
+        - task_key: reset_streaming_state
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: ../../notebooks/00_setup/reset_streaming_state.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              volume: ${var.volume}
+
+    check_status:
+      name: "[clarksons-demo] 90 check_status (one-shot)"
+      description: One-shot probe of bronze/silver/matches/callings row counts and event-time freshness.
+      tasks:
+        - task_key: check_status
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: ../../notebooks/90_validation/check_status.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              volume: ${var.volume}
+
+    callings_merge:
+      name: "[clarksons-demo] 40 callings MERGE (streaming)"
+      description: |
+        Streaming foreachBatch over silver_positions. Each micro-batch:
+        ancestor-expand → equi-join shape_cells → chip-refine boundary cells
+        → within-batch presence runs → cross-batch run continuation → MERGE
+        INTO callings_gold (bitemporal). Trigger processingTime is configurable
+        via merge_trigger_seconds.
+      tasks:
+        - task_key: stream_callings
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: ../../notebooks/30_callings/stream_callings.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              merge_trigger_seconds: ${var.merge_trigger_seconds}
+              gap_minutes: ${var.gap_minutes}
+              watermark_hours: ${var.watermark_hours}
+              bitemporal: ${var.bitemporal}
+              reset_state: ${var.reset_state}

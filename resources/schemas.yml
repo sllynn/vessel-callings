@@ -1,0 +1,17 @@
+resources:
+  schemas:
+    vessel_callings:
+      catalog_name: ${var.catalog}
+      name: ${var.schema}
+      comment: Clarksons vessel-callings demo — shapes, positions, callings.
+
+  volumes:
+    landing:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.vessel_callings.name}
+      name: ${var.volume}
+      volume_type: MANAGED
+      comment: |
+        Landing zone for synthetic AIS records (generator writes
+        newline-JSON here; Auto Loader picks up into bronze) and a
+        working copy of the raw shape parquet files from data/.

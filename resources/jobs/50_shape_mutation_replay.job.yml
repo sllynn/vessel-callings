@@ -1,0 +1,16 @@
+resources:
+  jobs:
+    shape_mutation_replay:
+      name: "[clarksons-demo] 50 shape mutation replay"
+      description: |
+        Demo helper: at a scheduled sim-time, rewrite a chosen shape (expand
+        an ATBA, redraw a TSS lane). Drives the CDF-fed window recompute on
+        the callings_merge job so the bitemporal correctness story is visible.
+      tasks:
+        - task_key: replay_shape_change
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: ../../notebooks/40_mutations/replay_shape_change.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}

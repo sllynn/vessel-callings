@@ -1,0 +1,32 @@
+# Fleet composition (BRIEF.md §4.1, behaviour mix).
+# Used by fleet.build_fleet(seed, n) to deterministically draw N vessels from
+# these proportions. Speed in knots, course-change-rate in degrees/minute.
+
+mix:
+  liner:
+    weight: 0.30
+    types: [container]
+    speed_min: 16
+    speed_max: 24
+    course_change_rate_max: 6
+
+  tramp:
+    weight: 0.50
+    types: [bulk, tanker]
+    speed_min: 10
+    speed_max: 15
+    course_change_rate_max: 4
+
+  ferry:
+    weight: 0.05
+    types: [ferry]
+    speed_min: 18
+    speed_max: 24
+    course_change_rate_max: 8
+
+  fishing:
+    weight: 0.15
+    types: [fishing]
+    speed_min: 3
+    speed_max: 10
+    course_change_rate_max: 12
