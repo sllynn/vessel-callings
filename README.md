@@ -225,17 +225,17 @@ And the `targets.dev.workspace.host:` URL to the target workspace.
 ### 2. CLI profile in `~/.databrickscfg`
 
 ```ini
-[arm]    # or whatever name you like
+[<profile>]    # name it whatever fits the customer environment
 host = https://<your-workspace>.azuredatabricks.net
 ```
 
 Authenticate once:
 
 ```bash
-databricks auth login --profile arm
+databricks auth login --profile <profile>
 ```
 
-Then every bundle command takes `-p arm`.
+Then every bundle command takes `-p <profile>`.
 
 ### 3. The dev cluster
 
@@ -252,7 +252,7 @@ A reference spec is committed at [`infra/cluster.json`](./infra/cluster.json).
 To clone an existing one:
 
 ```bash
-databricks clusters create --json @infra/cluster.json -p arm
+databricks clusters create --json @infra/cluster.json -p <profile>
 ```
 
 Then put its ID into `var.cluster_id` in `databricks.yml`.
@@ -266,10 +266,10 @@ Then put its ID into `var.cluster_id` in `databricks.yml`.
 .venv/bin/uv pip compile requirements.txt -o requirements.lock
 
 # 2. Validate (catches yaml typos before round-tripping the workspace)
-databricks bundle validate -t dev -p arm
+databricks bundle validate -t dev -p <profile>
 
 # 3. Deploy
-databricks bundle deploy -t dev -p arm
+databricks bundle deploy -t dev -p <profile>
 ```
 
 After this you'll see seven jobs in the workspace prefixed `[clarksons-demo]`:
@@ -293,29 +293,29 @@ The schema, volume, and `data/` files are uploaded as bundle artifacts.
 
 ```bash
 # 0. Reset everything from any prior run (drops streaming tables + checkpoints)
-databricks bundle run reset_streaming_state -t dev -p arm
+databricks bundle run reset_streaming_state -t dev -p <profile>
 
 # 1. Bootstrap — copy shape parquets into the volume, load shapes_raw
-databricks bundle run bootstrap -t dev -p arm
+databricks bundle run bootstrap -t dev -p <profile>
 
 # 2. Shape index — build shape_cells (~10 min for 452 shapes / 530k cells)
-databricks bundle run shape_index -t dev -p arm
+databricks bundle run shape_index -t dev -p <profile>
 
 # 3. Start the three streaming jobs in this order, each in background:
 
 #    a. Generator first — gives the indexer files to chew on
-databricks bundle run position_generate -t dev -p arm --no-wait
+databricks bundle run position_generate -t dev -p <profile> --no-wait
 
 #    b. Position indexer — bronze → silver streaming
 sleep 30  # let bronze get its first rows
-databricks bundle run position_index -t dev -p arm --no-wait
+databricks bundle run position_index -t dev -p <profile> --no-wait
 
 #    c. Callings stream — silver → callings_gold via foreachBatch MERGE
 sleep 30
-databricks bundle run callings_merge -t dev -p arm --no-wait
+databricks bundle run callings_merge -t dev -p <profile> --no-wait
 
 # 4. Watch progress
-databricks bundle run check_status -t dev -p arm
+databricks bundle run check_status -t dev -p <profile>
 ```
 
 `check_status` returns a JSON summary of row counts and event-time ranges
@@ -357,11 +357,11 @@ from the top.
 
 ```bash
 # Cancel all active clarksons-demo runs
-databricks jobs list-runs -p arm --active-only -o json | python3 -c "
+databricks jobs list-runs -p <profile> --active-only -o json | python3 -c "
 import sys, json
 for r in json.load(sys.stdin):
     if 'clarksons-demo' in (r.get('run_name','') or ''):
-        print(r.get('run_id'))" | xargs -I{} databricks jobs cancel-run {} -p arm
+        print(r.get('run_id'))" | xargs -I{} databricks jobs cancel-run {} -p <profile>
 ```
 
 `position_generate` self-terminates at `max_runtime_minutes`. The two
@@ -371,13 +371,13 @@ To wipe all generated state and keep only the static `shapes_raw` /
 `shape_cells`:
 
 ```bash
-databricks bundle run reset_streaming_state -t dev -p arm
+databricks bundle run reset_streaming_state -t dev -p <profile>
 ```
 
 To remove **everything** including shapes and the bundle's UC objects:
 
 ```bash
-databricks bundle destroy -t dev -p arm
+databricks bundle destroy -t dev -p <profile>
 ```
 
 This deletes the schema, volume, and all the streaming tables. The static
