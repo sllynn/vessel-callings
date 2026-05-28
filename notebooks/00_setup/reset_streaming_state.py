@@ -28,7 +28,7 @@ streaming_tables = [
     f"{catalog}.{schema}.callings_gold",
 ]
 
-checkpoint_root = f"/Volumes/{catalog}/{schema}/{volume}/_checkpoints"
+checkpoint_root = f"/Volumes/{catalog}/{schema}/{volume}/_checkpoints"  # covers v1 + v2
 schema_root     = f"/Volumes/{catalog}/{schema}/{volume}/_schema"
 
 # COMMAND ----------

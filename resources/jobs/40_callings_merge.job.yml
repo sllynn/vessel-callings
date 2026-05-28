@@ -1,5 +1,17 @@
 resources:
   jobs:
+    truncate_callings:
+      name: "[clarksons-demo] 00 truncate_callings (one-shot)"
+      description: Empties callings_gold and position_shape_matches without touching their schemas or the streaming checkpoint.
+      tasks:
+        - task_key: truncate_callings
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: ../../notebooks/00_setup/truncate_callings.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+
     reset_streaming_state:
       name: "[clarksons-demo] 00 reset_streaming_state (one-shot)"
       description: Drops bronze/silver/matches/callings tables and clears all streaming checkpoints. Static shapes_raw/shape_cells are untouched.
@@ -26,6 +38,25 @@ resources:
               schema: ${var.schema}
               volume: ${var.volume}
 
+    callings_merge_v2:
+      name: "[clarksons-demo] 40 callings MERGE v2 (gaps-and-islands)"
+      description: |
+        §5.1 of BRIEF.md — gaps-and-islands streaming MERGE. No gap_seconds
+        heuristic. Observational closure: exit_ts is set only when we
+        observe the vessel outside the shape after last_seen_ts. Lookback
+        bounded by retraction_window_days.
+      tasks:
+        - task_key: stream_callings_v2
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: ../../notebooks/30_callings/stream_callings_v2.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              merge_trigger_seconds: ${var.merge_trigger_seconds}
+              retraction_window_days: ${var.retraction_window_days}
+              reset_state: ${var.reset_state}
+
     callings_merge:
       name: "[clarksons-demo] 40 callings MERGE (streaming)"
       description: |
@@ -44,6 +75,5 @@ resources:
               schema: ${var.schema}
               merge_trigger_seconds: ${var.merge_trigger_seconds}
               gap_minutes: ${var.gap_minutes}
-              watermark_hours: ${var.watermark_hours}
               bitemporal: ${var.bitemporal}
               reset_state: ${var.reset_state}

@@ -55,15 +55,18 @@ variables:
   merge_trigger_seconds:
     description: Streaming micro-batch cadence for the callings MERGE in seconds
     default: "30"
-  watermark_hours:
-    description: Streaming watermark window in hours (must cover lateness_max_hours)
-    default: "6"
   bitemporal:
     description: Whether the callings table carries valid_from/valid_to as well as as_of_ts
     default: "true"
   gap_minutes:
-    description: Sim-time gap above which consecutive matches become a new calling
+    description: Sim-time gap above which consecutive matches become a new calling (§5 MVP only)
     default: "5"
+  retraction_window_days:
+    description: |
+      §5.1 v2 design — cap on the per-vessel lookback in days. Late positions
+      arriving beyond this window are still landed in bronze/silver but the
+      streaming MERGE will not retract existing callings to reflect them.
+    default: "7"
   max_runtime_minutes:
     description: Wall-clock cap on the long-running generator job
     default: "240"

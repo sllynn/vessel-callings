@@ -18,5 +18,4 @@ resources:
               volume: ${var.volume}
               position_res: ${var.position_res}
               trigger_seconds: "30"
-              watermark_hours: ${var.watermark_hours}
               reset_state: ${var.reset_state}

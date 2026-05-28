@@ -41,6 +41,7 @@ WITH safe_shapes AS (
   SELECT /*+ REPARTITION(64) */
     shape_id,
     target_res,
+    simplify_tolerance,
     -- simplify_tolerance is populated by pick_target_res from the
     -- per-category map. Tolerance scales with target_res — coarser cells
     -- can absorb stronger simplification with no visible boundary change.
@@ -60,7 +61,21 @@ SELECT
   s.target_res,
   t.cellid AS cell,
   t.core,
-  t.chip   AS chip_wkb
+  -- Buffer boundary chips outward by `simplify_tolerance / 10` to close
+  -- the planar/spheroidal seam between adjacent cells. h3_tessellateaswkb
+  -- computes chips spheroidally and stores them as planar WKB; at large
+  -- cell sizes the straight-line approximation of cell edges retreats
+  -- inside the true spheroidal edge, leaving thin "no-chip" strips at
+  -- every cell boundary that valid points can land in. A 1/10-tolerance
+  -- buffer (~1.1 km for res-2 ocean basins, ~110 m for res-5 EEZs)
+  -- overlaps adjacent chips just enough to bridge those strips.
+  CASE
+    WHEN NOT t.core
+     AND t.chip IS NOT NULL
+     AND coalesce(s.simplify_tolerance, 0) > 0
+    THEN ST_AsBinary(ST_Buffer(ST_GeomFromWKB(t.chip, 4326), s.simplify_tolerance / 10))
+    ELSE t.chip
+  END AS chip_wkb
 FROM safe_shapes s
 LATERAL VIEW inline(h3_tessellateaswkb(s.geom_wkb, s.target_res)) t
 """)

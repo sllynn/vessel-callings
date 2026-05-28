@@ -433,6 +433,483 @@ window re-emission. This is exactly the Option-A pattern from §4 of the
 research brief — implemented small so it can be reasoned about, not
 benchmarked.
 
+> **Superseded** for the production target by the gaps-and-islands design
+> in **§5.1** below. The demo-day MVP (in
+> `notebooks/30_callings/stream_callings.py`) still uses the gap-threshold
+> heuristic described above; §5.1 is the agreed follow-on shape for the
+> Clarksons customer team after the customer rejected the gap-threshold
+> heuristic in the demo prep review on 2026-05-22.
+
+## 5.1 Streaming MERGE refinement — gaps-and-islands derivation
+
+*Added 2026-05-22 after demo prep with Stuart and the customer team
+(Chris, Luke, Leander). Supersedes the simpler "idempotent MERGE keyed
+on `(vessel_id, shape_id, entry_ts)` with a `gap_seconds` threshold to
+start a new calling" pattern in §5.*
+
+### Motivation
+
+The §5 design used a sim-time gap threshold (`gap_seconds`) to decide
+when a vessel was no longer "in" a shape. The customer rejected the
+heuristic — **vessels routinely sit in a single shipyard, anchorage, or
+port for months** without their AIS positions ever leaving the polygon.
+Any reasonable `gap_seconds` would close such callings prematurely.
+
+The correct semantics: a calling closes **when we observe the vessel
+somewhere outside the shape after the calling's last in-position**. No
+time threshold. The closure trigger is observational, not temporal.
+
+This requires reasoning over all positions (matches *and* non-matches),
+and rebuilding callings whenever a new batch brings in late positions
+that could affect existing rows — including late OUT-positions arriving
+inside a previously-closed calling, which split it.
+
+### Schema (refined)
+
+```
+vessel_id     STRING
+shape_id      BIGINT
+entry_ts      TIMESTAMP   -- first observed in-position; immutable
+last_seen_ts  TIMESTAMP   -- latest observed in-position; monotonic
+exit_ts       TIMESTAMP   -- NULL ⇔ open; set to the first observed
+                          --   out-position after last_seen_ts
+n_positions   BIGINT
+as_of_ts      TIMESTAMP   -- wall-clock of last write
+```
+
+The `valid_from / valid_to` columns from the §5 design are dropped.
+Delta time travel (`SELECT ... FROM callings_gold VERSION AS OF
+<wall-clock>`) gives equivalent forensic reconstruction without the
+row-level versioning columns and without the extra MERGE complexity to
+maintain them. `as_of_ts` on the row plus Delta history is the two-axis
+bitemporal model the customer needs.
+
+`exit_ts IS NULL` is the authoritative "calling open" flag. A non-NULL
+`exit_ts` means we have *observed* the vessel outside the shape after
+`last_seen_ts`.
+
+**Table feature.** Both `callings_gold` and `silver_positions` are
+created with the `delta.feature.catalogManaged` table feature so they
+can participate in `BEGIN ATOMIC ... END` transactions (see "The atomic
+update" below). Set via `TBLPROPERTIES ('delta.feature.catalogManaged' = 'supported')`
+at create time, and re-applied defensively via `ALTER TABLE` at each
+notebook start in case the table was created by an earlier version
+without the feature.
+
+### Core idea — gaps-and-islands per (vessel, shape)
+
+For each vessel V's positions in the affected window:
+
+1. Number positions globally per vessel: `pos_num = row_number() OVER
+   (PARTITION BY vessel_id ORDER BY event_ts)`.
+2. Match each position against the shape catalogue (H3 ancestor + chip
+   refinement).
+3. Number matches per `(vessel, shape)`: `match_num = row_number() OVER
+   (PARTITION BY vessel_id, shape_id ORDER BY event_ts)`.
+4. The expression `(pos_num - match_num)` is constant within a contiguous
+   in-shape run and increments by 1 every time the vessel is observed
+   outside the shape between two in-shape positions. **Group by it** to
+   recover the calling intervals.
+
+Worked example for V's positions `T1(null) → T2(A) → T3(null) → T4(A) → T5(B)`:
+
+| event_ts | match | pos_num | match_num | diff = pos_num − match_num |
+|---|---|---|---|---|
+| T1 (null) | — | 1 | — | — |
+| T2 (A) | A | 2 | A:1 | A: **1** |
+| T3 (null) | — | 3 | — | — |
+| T4 (A) | A | 4 | A:2 | A: **2** |
+| T5 (B) | B | 5 | B:1 | B: **4** |
+
+Three distinct diff values across matched rows → **three callings**: two
+for A (closed), one for B (open). The OUT-positions at T1 and T3 are
+not materialised separately; their effect is *implicit* in the diff jumps.
+
+### Cell lookup — `h3_longlatash3`, not `h3_toparent`
+
+**Important correction to the §5 (and original research-brief) optimisation.**
+The §5 design proposed indexing each position at one (fine) H3 resolution
+and using `h3_toparent` to "virtually walk up" to each target_res at join
+time. Cheaper because it's a bit operation on the cell ID rather than a
+fresh geometry-to-cell lookup. The implicit claim was that the chip-based
+boundary refinement would compensate for any imprecision.
+
+**It does not.** H3's aperture-7 subdivision rotates each child cell
+~19.1° relative to its parent — child cells "stick out" of the parent's
+hexagonal boundary into neighbouring parents' areas. The consequence:
+
+  `h3_toparent(h3_longlatash3(p, M), N)`  ≠  `h3_longlatash3(p, N)`
+
+for points `p` near a res-N cell boundary. The first walks the *index*
+hierarchy; the second returns the cell *geometrically* containing the
+point. They can be different cells.
+
+This matters at the chip-refinement step because the chip stored under
+each `shape_cells` row is *the intersection of that specific cell's
+hexagon with the polygon*. If `h3_toparent` walks us to cell **B**, but
+the point is geometrically in cell **A** (a neighbour, also possibly in
+`shape_cells` for the same shape), then `ST_Contains(chip_for_B, point)`
+returns FALSE — not because the point isn't in the polygon (it is), but
+because the point isn't in the cell whose chip we're testing.
+
+Symptoms in the field: an ocean-going vessel transiting a polygon edge
+appears to be "in" the polygon at some positions and "out" at others, in
+a pattern that has nothing to do with the actual polygon shape. The
+mismatch is observable wherever a vessel passes near a res-N cell
+boundary in a region where multiple res-N cells of the same polygon
+abut.
+
+**The fix:** use `h3_longlatash3(lon, lat, target_res)` at each
+`target_res`, expanding per row, instead of `h3_toparent` from a single
+indexed res. Slightly more expensive per position (N
+`h3_longlatash3` calls instead of one + N bit walks) but always
+geometrically correct.
+
+```sql
+-- Wrong: index-walked, mismatches at cell boundaries
+LATERAL VIEW inline(array(
+  named_struct('ancestor_cell', h3_toparent(h3_cell, 2), 'res', 2),
+  named_struct('ancestor_cell', h3_toparent(h3_cell, 5), 'res', 5),
+  ...
+)) a
+
+-- Right: geometric at each resolution
+LATERAL VIEW inline(array(
+  named_struct('ancestor_cell', h3_longlatash3(lon, lat, 2), 'res', 2),
+  named_struct('ancestor_cell', h3_longlatash3(lon, lat, 5), 'res', 5),
+  ...
+)) a
+```
+
+The silver-side `h3_cell` column at `position_res` is no longer
+load-bearing for the join — keep it though, it's still useful as the
+Liquid Clustering key on `silver_positions`.
+
+Discovered 2026-05-22 while validating vessel v-000028's track:
+22 positions in the Bay of Biscay disappeared from North-Atlantic
+callings because their `h3_toparent`'d res-2 cell was a neighbouring
+boundary cell whose chip didn't include their geometric location.
+
+### Closure detection — `exit_ts` derivation
+
+By construction, the position at `pos_num = last_pos_num + 1` (the
+calling's next vessel-position, if any) is *not* in this shape — if it
+were, it would have been part of the same calling and the diff would not
+have advanced. So `exit_ts` is exactly the event_ts of that position:
+
+```sql
+SELECT d.*,
+  (SELECT np.event_ts
+     FROM numbered_positions np
+    WHERE np.vessel_id = d.vessel_id
+      AND np.pos_num   = d.last_pos_num + 1) AS exit_ts
+FROM derived d
+```
+
+If `pos_num = last_pos_num + 1` doesn't exist for V (no further
+positions yet observed), `exit_ts = NULL` and the calling is **open** —
+to be revisited in a future batch.
+
+### The affected-window trigger — `candidate_pairs`
+
+Re-derivation is scoped to the `(vessel, shape)` pairs that *could be
+affected by this batch*. Three sources, UNION'd:
+
+```sql
+candidate_pairs AS (
+  -- (a) (V, S) the batch produced a new IN-match for
+  SELECT DISTINCT vessel_id, shape_id FROM batch_matches
+
+  UNION
+
+  -- (b) Open callings for vessels with ANY new position in the batch.
+  --     A late OUT-position never appears in batch_matches but still
+  --     needs to close the open calling.
+  SELECT c.vessel_id, c.shape_id
+  FROM callings_gold c
+  WHERE c.exit_ts IS NULL
+    AND c.vessel_id IN (SELECT DISTINCT vessel_id FROM batch_positions)
+
+  UNION
+
+  -- (c) Closed callings whose [entry_ts, exit_ts] envelope contains a
+  --     new batch position. A late OUT inside the envelope of an old
+  --     closed calling needs to split that calling in two.
+  SELECT c.vessel_id, c.shape_id
+  FROM callings_gold c
+  JOIN batch_positions p
+    ON p.vessel_id = c.vessel_id
+   AND p.event_ts BETWEEN c.entry_ts AND c.exit_ts
+  WHERE c.exit_ts IS NOT NULL
+)
+```
+
+(a) handles the normal forward-progress case. (b) catches the late-OUT-
+closes-open-calling case. (c) catches the late-OUT-splits-closed-calling
+case. Without all three, late corrections silently fail to propagate.
+
+### Lookback bounded by `retraction_window`
+
+Numbering must include every position in the affected window — including
+the late OUT and all preceding positions — so the diff arithmetic is
+consistent. The per-vessel lookback is therefore the *earliest*
+`entry_ts` across any affected calling. Without a bound, a six-month-
+old shipyard calling would force six months of position renumbering
+every time a single late position arrived for that vessel.
+
+The accepted shape is to **cap the lookback at `retraction_window`** of
+wall-clock retraction tolerance. Late positions arriving beyond the
+window are still INSERTed into bronze/silver and visible to ad-hoc
+queries — but the streaming MERGE will not retract existing callings to
+reflect them. A separate manual replay job is the escape hatch for
+older corrections.
+
+```sql
+vessel_lookback AS (
+  SELECT cp.vessel_id,
+    GREATEST(
+      -- The earliest entry_ts across any affected calling or new match,
+      -- per vessel.
+      LEAST(
+        coalesce(MIN(c.entry_ts),  TIMESTAMP'9999-01-01'),
+        coalesce(MIN(bm.event_ts), TIMESTAMP'9999-01-01')
+      ),
+      -- ...but capped at `retraction_window` before the latest observed
+      -- event_ts. Anything older is out of scope for streaming.
+      (SELECT MAX(event_ts) FROM silver_positions) - INTERVAL '7' DAY
+    ) AS lookback_ts
+  FROM candidate_pairs cp
+  LEFT JOIN callings_gold c
+    ON c.vessel_id = cp.vessel_id AND c.shape_id = cp.shape_id
+  LEFT JOIN batch_matches bm
+    ON bm.vessel_id = cp.vessel_id AND bm.shape_id = cp.shape_id
+  GROUP BY cp.vessel_id
+)
+```
+
+**Recommended default: `retraction_window = 7 days`** for production at
+Clarksons scale. Smaller windows mean cheaper batches but tighter
+late-correction guarantees; larger windows go the other way. Tuning
+knob — likely worth a customer conversation once they see real
+late-arrival distributions in their AIS feed.
+
+### Full per-batch CTE chain
+
+```sql
+WITH
+  -- 1. (V, S) candidate set
+  candidate_pairs   AS (… see above …),
+
+  -- 2. Per-vessel lookback, capped at retraction_window
+  vessel_lookback   AS (… see above …),
+
+  -- 3. Relevant position history per affected vessel
+  relevant_positions AS (
+    SELECT p.*
+    FROM silver_positions p
+    JOIN vessel_lookback l ON l.vessel_id = p.vessel_id
+    WHERE p.event_ts >= l.lookback_ts
+  ),
+
+  -- 4. Global per-vessel position numbering
+  numbered_positions AS (
+    SELECT *,
+      row_number() OVER (PARTITION BY vessel_id ORDER BY event_ts) AS pos_num
+    FROM relevant_positions
+  ),
+
+  -- 5. Match each numbered position against shape_cells, scoped to
+  --    candidate_pairs to avoid re-matching against the whole catalogue.
+  --    NOTE: `ancestor_array` here uses h3_longlatash3(lon, lat, r) at
+  --    each target_res, NOT h3_toparent — see "Cell lookup" section
+  --    above for why.
+  --    (For an even cheaper variant, JOIN position_shape_matches as a
+  --    cache for historical matches and only re-match the new batch
+  --    positions through the H3 ancestor join.)
+  matched AS (
+    SELECT np.vessel_id, sc.shape_id, np.event_ts, np.pos_num,
+           np.lon, np.lat
+    FROM numbered_positions np
+    LATERAL VIEW inline({ancestor_array}) a
+    JOIN shape_cells sc
+      ON sc.cell = a.ancestor_cell
+     AND sc.target_res = a.res
+    JOIN candidate_pairs cp
+      ON cp.vessel_id = np.vessel_id
+     AND cp.shape_id  = sc.shape_id
+    WHERE sc.core
+       OR ST_Contains(ST_GeomFromWKB(sc.chip_wkb, 4326),
+                      ST_Point(np.lon, np.lat, 4326))
+  ),
+
+  -- 6. Per-(vessel, shape) match numbering
+  numbered_matched AS (
+    SELECT *,
+      row_number() OVER (PARTITION BY vessel_id, shape_id ORDER BY event_ts) AS match_num
+    FROM matched
+  ),
+
+  -- 7. Gaps-and-islands aggregation
+  derived AS (
+    SELECT vessel_id, shape_id,
+      MIN(event_ts) AS entry_ts,
+      MAX(event_ts) AS last_seen_ts,
+      MAX(pos_num)  AS last_pos_num,
+      COUNT(*)      AS n_positions
+    FROM numbered_matched
+    GROUP BY vessel_id, shape_id, (pos_num - match_num)
+  ),
+
+  -- 8. Add exit_ts (first observed out-position after last_seen_ts)
+  callings_from_diff AS (
+    SELECT d.*,
+      (SELECT np.event_ts FROM numbered_positions np
+        WHERE np.vessel_id = d.vessel_id
+          AND np.pos_num   = d.last_pos_num + 1) AS exit_ts
+    FROM derived d
+  );
+```
+
+### The atomic update — `BEGIN ATOMIC ... END`
+
+Write into `callings_gold` is a single atomic transaction
+([`BEGIN ATOMIC ... END`](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-txn-begin-atomic),
+DBR 17+) so the customer's downstream front end never observes an
+inconsistent intermediate state between the upsert and the orphan
+cleanup. Two statements:
+
+- `MERGE INTO` — handles UPDATE-for-changed + INSERT-for-new.
+- `DELETE` — removes orphans inside the affected window that the
+  re-derivation no longer produces.
+
+`BEGIN ATOMIC` requires the target table to have the
+`delta.feature.catalogManaged` feature enabled — set at table creation
+via `TBLPROPERTIES ('delta.feature.catalogManaged' = 'supported')`.
+
+```sql
+BEGIN ATOMIC
+
+  -- (a+b) MERGE INTO covers both update and insert in one statement.
+  --       (Spark SQL doesn't support `UPDATE ... FROM <joined-table>`;
+  --       MERGE is the canonical update-with-join pattern.)
+  MERGE INTO callings_gold AS c
+  USING callings_from_diff AS n
+  ON  c.vessel_id = n.vessel_id
+  AND c.shape_id  = n.shape_id
+  AND c.entry_ts  = n.entry_ts
+  WHEN MATCHED THEN UPDATE SET
+      last_seen_ts = n.last_seen_ts,
+      exit_ts      = n.exit_ts,
+      n_positions  = n.n_positions,
+      as_of_ts     = current_timestamp()
+  WHEN NOT MATCHED THEN INSERT (
+      vessel_id, shape_id, entry_ts, last_seen_ts, exit_ts, n_positions, as_of_ts
+  ) VALUES (
+      n.vessel_id, n.shape_id, n.entry_ts, n.last_seen_ts, n.exit_ts,
+      n.n_positions, current_timestamp()
+  );
+
+  -- (c) DELETE orphans inside the affected window that the
+  --     re-derivation no longer produces.
+  DELETE FROM callings_gold
+   WHERE EXISTS (
+       SELECT 1 FROM vessel_lookback l
+        WHERE l.vessel_id = callings_gold.vessel_id
+          AND callings_gold.entry_ts >= l.lookback_ts)
+     AND NOT EXISTS (
+       SELECT 1 FROM callings_from_diff n
+        WHERE n.vessel_id = callings_gold.vessel_id
+          AND n.shape_id  = callings_gold.shape_id
+          AND n.entry_ts  = callings_gold.entry_ts);
+
+END
+```
+
+For DBR runtimes older than 17 the same intent is expressible as a
+single `MERGE INTO … USING (UNION-source) … WHEN MATCHED … WHEN NOT
+MATCHED … WHEN NOT MATCHED BY SOURCE …` — heavier syntactically but
+identical semantics.
+
+### Operational details — streaming compatibility
+
+Two real-world implementation requirements that took some iteration to
+land:
+
+**1. Materialise `batch_df` as a catalog-managed Delta staging table.**
+`BEGIN ATOMIC` rejects temp views created via the DataFrame API
+(`batch_df.createOrReplaceTempView(...)`); it walks the SQL view
+dependency tree at plan time and balks at any node that didn't come
+from a SQL DDL. The fix is to **persist** the batch DataFrame to a
+proper Delta table at the start of each `foreachBatch` invocation, and
+then build SQL views over that table:
+
+```python
+batch_df.write.format("delta").mode("overwrite") \
+    .option("overwriteSchema", "true").saveAsTable(staging_tbl)
+s.sql(f"ALTER TABLE {staging_tbl} "
+      f"SET TBLPROPERTIES ('delta.feature.catalogManaged' = 'supported')")
+s.sql(f"CREATE OR REPLACE TEMP VIEW batch_positions AS SELECT * FROM {staging_tbl}")
+```
+
+The staging table is overwritten each batch (only the latest batch's
+rows live in it). It needs `catalogManaged` so the `BEGIN ATOMIC` block
+can read from it transactionally.
+
+**2. `ignoreDeletes = true` on both consumer `readStream`s.** A `TRUNCATE`
+on `bronze_ais_positions` or `silver_positions` writes a Delta commit
+that deletes all the source's data. Any consumer stream reading from
+those tables fails its next batch with `DELTA_SOURCE_IGNORE_DELETE`
+unless the option is set:
+
+```python
+spark.readStream
+    .option("ignoreDeletes", "true")
+    .table(bronze)
+    ...
+```
+
+This is needed both because the operator may explicitly `TRUNCATE`
+(e.g. via the `truncate_callings` one-shot job for state cleanup) and
+because shape-mutation replay may want to clear and re-derive matches
+from a known good baseline. Without `ignoreDeletes` the streams
+brittle-fail on any deletion commit upstream of them.
+
+### Open semantic question — what `exit_ts` represents
+
+When closed, `exit_ts` is set to the first *observed* out-position
+event_ts for the vessel after `last_seen_ts`. This is the **upper
+bound** of when the actual exit could have occurred — the true exit
+happened somewhere in `(last_seen_ts, exit_ts]`. Two alternative
+conventions worth raising with the customer team:
+
+- `exit_ts = last_seen_ts` — *lower bound*, conservative dwell time.
+- `exit_ts = (last_seen_ts + first_out_ts) / 2` — midpoint estimate.
+
+Whichever is chosen, both endpoints are preserved on the row
+(`last_seen_ts` is always the last observed in-position) so downstream
+analytics can recover the alternative interpretations.
+
+### Performance shape
+
+- Renumbering scales linearly with affected positions per vessel,
+  capped by `retraction_window`. At default 7 days × 500 vessels ×
+  10-second AIS cadence, ~30M positions in the worst-case affected
+  set per batch — comfortable on a Photon cluster.
+- The H3 matching step (the expensive one) can reuse the append-only
+  `position_shape_matches` table as a cache so historical positions
+  aren't re-matched. Only new batch positions need a fresh H3 ancestor
+  join.
+- Each `(vessel, shape)` re-derivation is independent — Spark naturally
+  parallelises across vessels.
+
+### Status
+
+Designed 2026-05-22 during demo prep based on customer pushback on the
+§5 gap-threshold model. The demo-day MVP in
+`notebooks/30_callings/stream_callings.py` still uses the §5 pattern;
+this §5.1 design is the architectural target for the customer follow-up
+the week of 2026-05-26.
+
 ## 6. What the demo lets us *show*
 
 1. The chip pattern in motion — boundary cells producing `ST_Contains` calls,

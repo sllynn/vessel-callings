@@ -23,7 +23,6 @@ dbutils.widgets.text("catalog", "stuart")
 dbutils.widgets.text("schema", "clarksons")
 dbutils.widgets.text("merge_trigger_seconds", "30")
 dbutils.widgets.text("gap_minutes", "5")
-dbutils.widgets.text("watermark_hours", "6")
 dbutils.widgets.dropdown("bitemporal", "true", ["true", "false"])
 dbutils.widgets.dropdown("reset_state", "false", ["false", "true"])
 
@@ -32,7 +31,6 @@ schema = dbutils.widgets.get("schema")
 trigger_seconds = int(dbutils.widgets.get("merge_trigger_seconds"))
 gap_minutes = float(dbutils.widgets.get("gap_minutes"))
 gap_seconds = int(gap_minutes * 60)
-watermark_hours = int(dbutils.widgets.get("watermark_hours"))
 bitemporal = dbutils.widgets.get("bitemporal") == "true"
 reset_state = dbutils.widgets.get("reset_state") == "true"
 
@@ -289,7 +287,10 @@ def merge_micro_batch(batch_df, batch_id):
 
 query = (spark.readStream
     .table(silver)
-    .withWatermark("event_ts", f"{watermark_hours} hours")
+    # No `.withWatermark` — `foreachBatch` is a raw-batch sink and the
+    # engine doesn't apply the watermark to anything we do inside. Late-
+    # arrival handling happens IN foreachBatch via the `gap_seconds`
+    # cross-batch continuation against the active callings_gold rows.
     .writeStream
     .queryName("callings_stream")
     .foreachBatch(merge_micro_batch)

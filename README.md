@@ -214,9 +214,9 @@ Edit the `variables:` block to match the target environment:
 | `n_vessels` | `500` | Fleet size; 100–2 000 is comfortable on 2 workers |
 | `sim_speedup` | `60` | Sim-time : wall-time ratio (60× = 1 sim-hour per wall-minute) |
 | `position_res` | `8` | Finest `target_res` in shape_cells |
-| `merge_trigger_seconds` | `30` | Streaming MERGE cadence |
-| `gap_minutes` | `5` | Gap above which a new calling starts |
-| `watermark_hours` | `6` | Streaming watermark on event_ts |
+| `merge_trigger_seconds` | `30` | Streaming MERGE cadence (both v1 and v2) |
+| `gap_minutes` | `5` | Gap above which a new calling starts — **v1 MVP only** |
+| `retraction_window_days` | `7` | Per-vessel lookback cap for the v2 gaps-and-islands derivation |
 | `max_runtime_minutes` | `240` | Wall-clock cap on the generator |
 | `reset_state` | `false` | Flip to `true` on first run of a fresh demo |
 
@@ -272,18 +272,26 @@ databricks bundle validate -t dev -p <profile>
 databricks bundle deploy -t dev -p <profile>
 ```
 
-After this you'll see seven jobs in the workspace prefixed `[clarksons-demo]`:
+After this you'll see ten jobs in the workspace prefixed `[clarksons-demo]`:
 
 | Job key | Notebook | Mode |
 |---|---|---|
 | `bootstrap` | copy_shape_files + load_shapes | one-shot |
 | `shape_index` | pick_target_res + build_shape_cells | one-shot |
-| `position_generate` | generate_ais | long-running |
-| `position_index` | index_positions | streaming |
-| `callings_merge` | stream_callings | streaming |
+| `position_generate` | generate_ais (direct-to-bronze Delta writer) | long-running |
+| `position_index` | index_positions (bronze → silver streaming) | streaming |
+| `callings_merge` | stream_callings — gap-threshold heuristic (MVP) | streaming |
+| `callings_merge_v2` | stream_callings_v2 — gaps-and-islands derivation (production design per BRIEF.md §5.1) | streaming |
 | `shape_mutation_replay` | replay_shape_change (stub) | on-demand |
-| `reset_streaming_state` | reset_streaming_state | one-shot |
-| `check_status` | check_status | one-shot |
+| `truncate_callings` | truncate_callings (one-shot: clears callings_gold + position_shape_matches without touching schema or checkpoints) | one-shot |
+| `reset_streaming_state` | reset_streaming_state (drops all four streaming tables + checkpoints) | one-shot |
+| `check_status` | check_status (row counts + event_ts freshness probe) | one-shot |
+
+**Pick one callings stream, not both** — `callings_merge` and `callings_merge_v2`
+write to the same `callings_gold` table with incompatible schemas. The MVP keeps
+`callings_merge` for the original walk-through. `callings_merge_v2` is the
+recommended production design and what subsequent customer iterations should
+build on.
 
 The schema, volume, and `data/` files are uploaded as bundle artifacts.
 
@@ -311,8 +319,10 @@ sleep 30  # let bronze get its first rows
 databricks bundle run position_index -t dev -p <profile> --no-wait
 
 #    c. Callings stream — silver → callings_gold via foreachBatch MERGE
+#       Pick one: `callings_merge` (v1 MVP, gap-threshold) or `callings_merge_v2`
+#       (production gaps-and-islands design, see BRIEF.md §5.1).
 sleep 30
-databricks bundle run callings_merge -t dev -p <profile> --no-wait
+databricks bundle run callings_merge_v2 -t dev -p <profile> --no-wait
 
 # 4. Watch progress
 databricks bundle run check_status -t dev -p <profile>
@@ -385,7 +395,7 @@ This deletes the schema, volume, and all the streaming tables. The static
 
 ---
 
-## Known limitations / quirks for tomorrow
+## Known limitations / quirks
 
 - **Generator throughput** is ~1 k records/sec on the dev cluster with the
   default 500 vessels × 60× speedup. To push higher, raise `sim_speedup`
@@ -401,12 +411,21 @@ This deletes the schema, volume, and all the streaming tables. The static
   `tessellation_safe` flag. Splitting them at longitude 180° is a known
   follow-up.
 - **`reset_state=true`** must be flipped to `false` on subsequent restarts
-  of `position_index` / `callings_merge`, or each restart will wipe the
+  of `position_index` / `callings_merge*`, or each restart will wipe the
   in-flight streaming state.
-- **Schema evolution on bronze**: the generator writes `event_ts` /
-  `ingest_ts` as TIMESTAMP directly. If you've previously had Auto Loader
-  populate bronze (older Demo version) with these as DOUBLE, run
-  `reset_streaming_state` to clean up before the new generator runs.
+- **v1 vs v2 schema mismatch**: `callings_merge` (gap-threshold) and
+  `callings_merge_v2` (gaps-and-islands) write incompatible schemas to
+  the same `callings_gold` table. Don't run both. The v2 design is the
+  recommended target — see BRIEF.md §5.1.
+- **`catalogManaged` Delta feature** is required on `silver_positions`
+  and `callings_gold` for v2's `BEGIN ATOMIC` transactions. Both
+  notebooks set the TBLPROPERTY at create-time and re-apply via
+  `ALTER TABLE ... SET TBLPROPERTIES` defensively on each start.
+- **`ignoreDeletes = true`** is set on both `position_index`'s and
+  `callings_merge_v2`'s `readStream`. Without it, a `TRUNCATE` on
+  `bronze_ais_positions` or `silver_positions` (e.g. via the
+  `truncate_callings` job) crashes the downstream streaming query
+  with `DELTA_SOURCE_IGNORE_DELETE` on the next batch.
 
 ---
 
@@ -437,7 +456,8 @@ clarksons-demo/
 ├── notebooks/
 │   ├── 00_setup/
 │   │   ├── copy_shape_files.py
-│   │   └── reset_streaming_state.py
+│   │   ├── reset_streaming_state.py
+│   │   └── truncate_callings.py       ← clears callings_gold + position_shape_matches without dropping the tables
 │   ├── 10_shapes/
 │   │   ├── load_shapes.py
 │   │   ├── pick_target_res.py
@@ -446,13 +466,15 @@ clarksons-demo/
 │   │   ├── generate_ais.py            ← long-running; writes direct to bronze
 │   │   └── index_positions.py         ← streaming; bronze → silver
 │   ├── 30_callings/
-│   │   └── stream_callings.py         ← streaming; silver → callings_gold (foreachBatch MERGE)
+│   │   ├── stream_callings.py         ← v1 MVP — gap-threshold foreachBatch MERGE
+│   │   └── stream_callings_v2.py      ← v2 — gaps-and-islands per BRIEF.md §5.1
 │   ├── 40_mutations/
 │   │   └── replay_shape_change.py     ← (stub) shape mutation replay for bitemporal demo
 │   └── 90_validation/
 │       ├── check_status.py            ← one-shot row-count + freshness probe
 │       ├── explore_shape_cells.py     ← folium map: shape outlines + H3 cells
 │       ├── explore_positions.py       ← folium map: vessel tracks
+│       ├── explore_vessel_callings.py ← folium map for a single vessel: track + shapes + calling markers + history table
 │       ├── correctness_oracle.sql     ← (stub) brute-force ST_Contains baseline
 │       └── perf_microbench.sql        ← (stub) per-resolution join timing
 ├── src/

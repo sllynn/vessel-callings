@@ -17,7 +17,6 @@ dbutils.widgets.text("schema", "clarksons")
 dbutils.widgets.text("volume", "landing")
 dbutils.widgets.text("position_res", "8")
 dbutils.widgets.text("trigger_seconds", "30")
-dbutils.widgets.text("watermark_hours", "6")
 dbutils.widgets.dropdown("reset_state", "false", ["false", "true"])
 
 catalog = dbutils.widgets.get("catalog")
@@ -25,7 +24,6 @@ schema = dbutils.widgets.get("schema")
 volume = dbutils.widgets.get("volume")
 position_res = int(dbutils.widgets.get("position_res"))
 trigger_seconds = int(dbutils.widgets.get("trigger_seconds"))
-watermark_hours = int(dbutils.widgets.get("watermark_hours"))
 reset_state = dbutils.widgets.get("reset_state") == "true"
 
 bronze = f"{catalog}.{schema}.bronze_ais_positions"
@@ -36,7 +34,6 @@ print(f"bronze            : {bronze}")
 print(f"silver            : {silver}  (position_res={position_res})")
 print(f"silver_checkpoint : {silver_checkpoint}")
 print(f"trigger           : {trigger_seconds}s")
-print(f"watermark         : {watermark_hours} hours")
 print(f"reset_state       : {reset_state}")
 
 # COMMAND ----------
@@ -53,6 +50,26 @@ if reset_state:
         dbutils.fs.rm(silver_checkpoint, recurse=True)
     except Exception as e:
         print(f"  rm({silver_checkpoint}) → {e}")
+
+# Ensure bronze exists before we readStream from it — avoids the race where
+# this notebook starts before the generator's pip install completes and bronze
+# hasn't been created yet.
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {bronze} (
+  mmsi        BIGINT,
+  vessel_id   STRING,
+  event_ts    TIMESTAMP,
+  ingest_ts   TIMESTAMP,
+  lon         DOUBLE,
+  lat         DOUBLE,
+  sog         DOUBLE,
+  cog         DOUBLE,
+  heading     DOUBLE,
+  nav_status  STRING,
+  vessel_type STRING,
+  vessel_name STRING
+)
+""")
 
 spark.sql(f"""
 CREATE TABLE IF NOT EXISTS {silver} (
@@ -71,6 +88,18 @@ CREATE TABLE IF NOT EXISTS {silver} (
   h3_cell     BIGINT
 )
 CLUSTER BY (h3_cell, event_ts)
+TBLPROPERTIES (
+  -- Required so silver can participate in the downstream callings stream's
+  -- BEGIN ATOMIC transaction (which reads from silver via views).
+  'delta.feature.catalogManaged' = 'supported'
+)
+""")
+
+# Belt-and-brace: if the table already existed without the feature (created
+# by an earlier version of this notebook), ALTER it now. Idempotent.
+spark.sql(f"""
+ALTER TABLE {silver}
+SET TBLPROPERTIES ('delta.feature.catalogManaged' = 'supported')
 """)
 
 # COMMAND ----------
@@ -81,6 +110,7 @@ CLUSTER BY (h3_cell, event_ts)
 # COMMAND ----------
 
 silver_query = (spark.readStream
+    .option("ignoreDeletes", "true")  # tolerate TRUNCATE on bronze
     .table(bronze)
     .selectExpr(
         "mmsi",
@@ -92,7 +122,8 @@ silver_query = (spark.readStream
         f"h3_longlatash3(lon, lat, {position_res}) AS h3_cell",
     )
     .where("lat BETWEEN -90 AND 90 AND lon BETWEEN -180 AND 180")
-    .withWatermark("event_ts", f"{watermark_hours} hours")
+    # No `.withWatermark` — silver is a stateless enrich+filter sink, no
+    # stateful operator downstream that would consume the watermark.
     .writeStream
     .queryName("bronze_to_silver")
     .option("checkpointLocation", silver_checkpoint)
