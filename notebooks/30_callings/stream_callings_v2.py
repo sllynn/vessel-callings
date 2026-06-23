@@ -363,12 +363,24 @@ def merge_micro_batch(batch_df, batch_id):
       );
 
       -- (c) DELETE orphans inside the affected window that the
-      --     re-derivation no longer produces.
+      --     re-derivation no longer produces — **scoped to shapes that
+      --     are actually being re-derived in this batch** (candidate_pairs).
+      --
+      --     Without the candidate_pairs scope, this clause would delete
+      --     every existing calling for the vessel whose entry_ts >=
+      --     lookback_ts, even for shapes the vessel left several batches
+      --     ago and that aren't in candidate_pairs (so callings_from_diff
+      --     legitimately doesn't include them — they're not orphans,
+      --     they're simply out-of-scope for this batch).
       DELETE FROM {callings_tbl}
        WHERE EXISTS (
            SELECT 1 FROM vessel_lookback l
             WHERE l.vessel_id = {callings_tbl}.vessel_id
               AND {callings_tbl}.entry_ts >= l.lookback_ts)
+         AND EXISTS (
+           SELECT 1 FROM candidate_pairs cp
+            WHERE cp.vessel_id = {callings_tbl}.vessel_id
+              AND cp.shape_id  = {callings_tbl}.shape_id)
          AND NOT EXISTS (
            SELECT 1 FROM callings_from_diff n
             WHERE n.vessel_id = {callings_tbl}.vessel_id

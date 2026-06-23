@@ -9,7 +9,27 @@ dependencies = [
     "databricks-sql-connector>=3.5",
     "databricks-sdk>=0.40",
     "pydantic>=2.0",
+    # Required so the unwheeled `thrift==0.22.0` source build (transitive
+    # dep of databricks-sql-connector) can find setuptools without going
+    # back to the index — paired with no-build-isolation-package below.
+    "setuptools>=70.0",
+    "wheel>=0.42",
 ]
 
 [tool.uv]
 package = false
+# `thrift` ships sdist only; uv's default build isolation can't resolve
+# setuptools through the Databricks Apps build runtime's index. Disabling
+# isolation for this package lets the build use our project-level
+# setuptools/wheel pins above.
+no-build-isolation-package = ["thrift"]
+
+# Use the supply-chain-safe production pypi proxy (mirrors the npm one).
+# The legacy `pypi-proxy.dev.databricks.com` proxy is flaky from inside
+# the Databricks Apps build runtime and gets timeouts on package
+# downloads; the cloud proxy is the documented dev-laptop and runtime
+# default.
+[[tool.uv.index]]
+name = "databricks-cloud"
+url = "https://pypi-proxy.cloud.databricks.com/simple/"
+default = true

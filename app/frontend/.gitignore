@@ -4,8 +4,10 @@ node_modules/
 # Parcel build cache — rebuilt on demand
 .parcel-cache/
 
-# Build output — rebuilt by `npm run build` before each deploy
-dist/
+# Build output (frontend/dist/) is *not* ignored: `databricks sync`
+# honours .gitignore on upload, so the built artefacts have to live in
+# the repo for the app to be deployable via a single `databricks sync`
+# invocation. Rebuild via `npm run build` before each deploy.
 
 # Logs
 npm-debug.log*

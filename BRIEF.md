@@ -810,12 +810,17 @@ BEGIN ATOMIC
   );
 
   -- (c) DELETE orphans inside the affected window that the
-  --     re-derivation no longer produces.
+  --     re-derivation no longer produces — scoped to shapes that are
+  --     actually being re-derived in this batch (candidate_pairs).
   DELETE FROM callings_gold
    WHERE EXISTS (
        SELECT 1 FROM vessel_lookback l
         WHERE l.vessel_id = callings_gold.vessel_id
           AND callings_gold.entry_ts >= l.lookback_ts)
+     AND EXISTS (
+       SELECT 1 FROM candidate_pairs cp
+        WHERE cp.vessel_id = callings_gold.vessel_id
+          AND cp.shape_id  = callings_gold.shape_id)
      AND NOT EXISTS (
        SELECT 1 FROM callings_from_diff n
         WHERE n.vessel_id = callings_gold.vessel_id
@@ -825,10 +830,38 @@ BEGIN ATOMIC
 END
 ```
 
+#### The candidate-scoping requirement on the DELETE
+
+The `EXISTS … candidate_pairs` clause above is load-bearing. Without
+it, the DELETE matches every existing calling for the vessel whose
+`entry_ts` is in the lookback window — including shapes the vessel
+has already left several batches ago. Those shapes legitimately aren't
+in `callings_from_diff` (they aren't in `candidate_pairs` for this
+batch — no new positions match them, no open calling exists, no closed
+calling envelope contains a new batch position), but the unscoped
+DELETE reads "not in callings_from_diff" as "orphan" and removes the
+valid historical calling.
+
+The symptom in the wild was vessels with a current open calling (e.g.
+French EEZ) carrying *zero* historical callings for shapes they had
+clearly transited through earlier (British EEZ, IMO TSS lanes, ITZs,
+precautionary areas). The matches were all present in
+`position_shape_matches`, but each batch silently deleted the older
+callings the previous batches had produced.
+
+Adding the candidate_pairs scope makes the DELETE's intent precise:
+*"within this batch's affected window, for shapes we're re-deriving,
+remove any prior calling the new derivation doesn't reproduce"*. Shapes
+outside the batch's scope are left untouched — which is correct,
+because we have no evidence to update or delete them.
+
+#### Compatibility note
+
 For DBR runtimes older than 17 the same intent is expressible as a
 single `MERGE INTO … USING (UNION-source) … WHEN MATCHED … WHEN NOT
 MATCHED … WHEN NOT MATCHED BY SOURCE …` — heavier syntactically but
-identical semantics.
+identical semantics. The candidate-pairs scope translates to a join
+predicate on the USING source.
 
 ### Operational details — streaming compatibility
 

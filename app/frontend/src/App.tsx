@@ -156,7 +156,7 @@ export default function App() {
     let cancelled = false;
     Promise.all([
       api.track(selectedVessel.vessel_id, 2000),
-      api.history(selectedVessel.vessel_id, 50),
+      api.history(selectedVessel.vessel_id, 500),
     ])
       .then(([t, h]) => {
         if (cancelled) return;

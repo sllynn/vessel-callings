@@ -59,18 +59,21 @@ run as you, against the real warehouse.
 databricks apps create clarksons-vessel-callings \
   --description "Live vessel-callings visualisation" -p sme
 
-# Build the frontend
+# Build the frontend — this writes to frontend/dist/ which is committed
+# to the repo (not gitignored), so the next `databricks sync` picks it up.
 cd app/frontend && npm run build && cd ..
 
-# Sync source to the workspace (excludes are important — node_modules and
-# .venv are huge and don't belong in the workspace)
+# Sync source to the workspace. Excludes node_modules / .venv / caches.
+# `databricks sync` honours .gitignore, so anything in there is excluded
+# automatically — and conversely, frontend/dist/ MUST stay un-ignored or
+# the workspace won't have the static assets the FastAPI app serves.
 databricks sync . /Workspace/Users/stuart.lynn@databricks.com/clarksons-vessel-callings \
   --exclude node_modules \
   --exclude .venv \
   --exclude __pycache__ \
+  --exclude .parcel-cache \
   --exclude frontend/src \
-  --exclude frontend/public \
-  -p sme
+  -p sme --full
 
 # Deploy
 databricks apps deploy clarksons-vessel-callings \
