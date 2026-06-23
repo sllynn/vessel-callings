@@ -22,6 +22,7 @@ resources:
               lateness_pct: ${var.lateness_pct}
               lateness_max_hours: ${var.lateness_max_hours}
               gps_jitter_m: ${var.gps_jitter_m}
+              lane_sigma_m: ${var.lane_sigma_m}
               dropout_pct: ${var.dropout_pct}
               workspace_files_path: ${workspace.file_path}
               max_runtime_minutes: ${var.max_runtime_minutes}

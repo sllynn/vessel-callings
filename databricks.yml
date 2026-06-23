@@ -9,7 +9,7 @@ include:
 variables:
   catalog:
     description: Unity Catalog catalog for all demo objects
-    default: stuart
+    default: geo_sme_emea_catalog
   schema:
     description: Schema under the catalog
     default: clarksons
@@ -18,7 +18,7 @@ variables:
     default: landing
   cluster_id:
     description: Existing all-purpose cluster used for interactive notebook work
-    default: 0519-163942-gq1rcl9r
+    default: 0623-115739-3a0fuwp8
 
   # --- generator knobs ---
   seed:
@@ -39,6 +39,14 @@ variables:
   gps_jitter_m:
     description: Gaussian GPS noise standard deviation in metres
     default: "10"
+  lane_sigma_m:
+    description: |
+      Per-vessel cross-track lane offset σ in metres. Each vessel gets a
+      fixed starboard offset drawn once for the run, applied perpendicular
+      to its current course, so vessels sharing a route fan out into
+      parallel lanes rather than tracing identical lines. Set to 0 to
+      disable.
+    default: "800"
   dropout_pct:
     description: Percentage of records silently dropped
     default: "0.5"
@@ -90,10 +98,10 @@ targets:
   dev:
     default: true
     # Deliberately NOT using `mode: development` — its dev-mode mutator
-    # prefixes every resource with [dev <user>] / dev_<user>_, and Stuart
-    # owns the `stuart` catalog so he wants the bare schema `clarksons`.
+    # prefixes every resource with [dev <user>] / dev_<user>_, and we want
+    # the bare schema `clarksons` under geo_sme_emea_catalog.
     workspace:
-      host: https://adb-984752964297111.11.azuredatabricks.net
+      host: https://fevm-geo-sme-emea.cloud.databricks.com
     run_as:
       user_name: stuart.lynn@databricks.com
     presets:

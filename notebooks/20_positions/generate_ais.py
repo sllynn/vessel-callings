@@ -33,6 +33,7 @@ dbutils.widgets.text("sim_speedup", "60")
 dbutils.widgets.text("lateness_pct", "5")
 dbutils.widgets.text("lateness_max_hours", "6")
 dbutils.widgets.text("gps_jitter_m", "10")
+dbutils.widgets.text("lane_sigma_m", "800")
 dbutils.widgets.text("dropout_pct", "0.5")
 dbutils.widgets.text("workspace_files_path", "")
 dbutils.widgets.text("max_runtime_minutes", "240")
@@ -50,6 +51,7 @@ sim_speedup = float(dbutils.widgets.get("sim_speedup"))
 lateness_pct = float(dbutils.widgets.get("lateness_pct"))
 lateness_max_hours = float(dbutils.widgets.get("lateness_max_hours"))
 gps_jitter_m = float(dbutils.widgets.get("gps_jitter_m"))
+lane_sigma_m = float(dbutils.widgets.get("lane_sigma_m"))
 dropout_pct = float(dbutils.widgets.get("dropout_pct"))
 flush_interval_s = float(dbutils.widgets.get("flush_interval_seconds"))
 flush_buffer_n = int(dbutils.widgets.get("flush_buffer_records"))
@@ -124,6 +126,7 @@ perturb = Perturber(
     lateness_pct=lateness_pct,
     lateness_max_hours=lateness_max_hours,
     gps_jitter_m=gps_jitter_m,
+    lane_sigma_m=lane_sigma_m,
     dropout_pct=dropout_pct,
 )
 wallclock_start = time.time()

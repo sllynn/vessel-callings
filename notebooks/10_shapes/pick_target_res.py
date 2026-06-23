@@ -10,6 +10,14 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install -q shapely
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
 import json
 
 dbutils.widgets.text("catalog", "stuart")
@@ -38,6 +46,8 @@ for col_name, col_type in [
     ("tessellation_quarantine", "BOOLEAN"),
     ("wkb_bytes", "BIGINT"),
     ("simplify_tolerance", "DOUBLE"),
+    ("morphology_radius", "DOUBLE"),
+    ("geom_simplified", "GEOMETRY(4326)"),
 ]:
     if col_name in existing_cols:
         print(f"  column {col_name} already present — skipping")
@@ -48,13 +58,22 @@ for col_name, col_type in [
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Assign target_res — category strategy
+# MAGIC ## Assign target_res, simplification tolerances, morphology radius
 # MAGIC
-# MAGIC | Category | target_res | simplify_tolerance (degrees) |
-# MAGIC | --- | --- | --- |
-# MAGIC | ocean_basin | 2 | 0.1° (~11 km) — basins are coarse at res 2; aggressive simplify is invisible |
-# MAGIC | eez | 5 | 0.01° (~1.1 km) — moderate; preserves coastal detail at res 5 |
-# MAGIC | All UKHO IMO routeing categories | 7 / 8 | 0 (no simplification) — Douglas-Peucker collapses sub-km² shapes; the cost of catching the Shetland ATBA via simplification is losing 12 small ATBAs + 13 small ITZs to degenerate geometries. UKHO data is authoritative and used as-is. |
+# MAGIC | Category | target_res | morphology_radius | simplify_tolerance |
+# MAGIC | --- | --- | --- | --- |
+# MAGIC | ocean_basin | 2 | 0.05° (~5.5 km) | 0.05° (~5.5 km) |
+# MAGIC | eez | 5 | 0.015° (~1.6 km) | 0.005° (~550 m) |
+# MAGIC | All UKHO IMO routeing categories | 7 / 8 | 0 | 0 |
+# MAGIC
+# MAGIC `morphology_radius` is the feature size below which features are
+# MAGIC smoothed away (mangroves, river-delta fingers, small islands, narrow
+# MAGIC peninsulas). The polygon is then put through an open-then-close
+# MAGIC sequence — `buffer(-r).buffer(+r).buffer(+r).buffer(-r)` — and a
+# MAGIC light `ST_Simplify` cleans up the vertex count introduced by the
+# MAGIC buffers' rounded corners. `geom_simplified` is the resulting
+# MAGIC geometry; downstream consumers (`build_shape_cells`, app outlines)
+# MAGIC read it directly — one source of truth.
 
 # COMMAND ----------
 
@@ -63,22 +82,23 @@ if strategy == "category":
     MERGE INTO {table} AS s
     USING (
       SELECT * FROM VALUES
-        -- (category, target_res, simplify_tolerance_degrees)
-        ('ocean_basin',                     2, 0.1),
-        ('eez',                             5, 0.01),
-        ('Areas to be Avoided',             7, 0.0),
-        ('Deep Water Route Part',           7, 0.0),
-        ('Inshore Traffic Zones',           7, 0.0),
-        ('Two-way Routes',                  7, 0.0),
-        ('Precautionary Areas',             8, 0.0),
-        ('Traffic Separation Scheme Lanes', 8, 0.0),
-        ('Traffic Separation Zones',        8, 0.0)
-      AS m(cat, res, tol)
+        -- (category, target_res, simplify_tolerance_degrees, morphology_radius_degrees)
+        ('ocean_basin',                     2, 0.05,  0.05),
+        ('eez',                             5, 0.005, 0.015),
+        ('Areas to be Avoided',             7, 0.0,   0.0),
+        ('Deep Water Route Part',           7, 0.0,   0.0),
+        ('Inshore Traffic Zones',           7, 0.0,   0.0),
+        ('Two-way Routes',                  7, 0.0,   0.0),
+        ('Precautionary Areas',             8, 0.0,   0.0),
+        ('Traffic Separation Scheme Lanes', 8, 0.0,   0.0),
+        ('Traffic Separation Zones',        8, 0.0,   0.0)
+      AS m(cat, res, tol, morph)
     ) AS m
     ON s.category = m.cat
     WHEN MATCHED THEN UPDATE SET
       target_res         = m.res,
-      simplify_tolerance = m.tol
+      simplify_tolerance = m.tol,
+      morphology_radius  = m.morph
     """)
 elif strategy == "area":
     raise NotImplementedError("area-based strategy is a TODO")
@@ -114,19 +134,90 @@ SET tessellation_safe = (ST_XMin(geom) >= -179 OR ST_XMax(geom) <= 179)
 
 # COMMAND ----------
 
+# Compute geom_simplified — the single canonical "simplified outline" used
+# downstream by build_shape_cells and the app's /shapes/outlines endpoint.
+#
+# Morphological open-then-close at radius r, then a light DP simplify:
+#   open(g)  = buffer(-r) → buffer(+r)   removes thin protrusions
+#   close(g) = buffer(+r) → buffer(-r)   fills thin notches
+# The two consecutive dilations collapse to buffer(+2r), so the chain
+# becomes (-r, +2r, -r): three buffer ops per polygon, not four.
+#
+# Parallelism: the SQL-side REPARTITION(64) hint kept losing to AQE's
+# coalesce-by-bytes logic (450 rows × few KB each looks "small" to AQE
+# even though each row drives expensive ST_Buffer work). mapInPandas
+# pushes execution to per-partition Python and AQE can't override it.
+# Same planar buffer semantics either way — Databricks' ST_Buffer on
+# GEOMETRY(4326) is planar, and shapely.buffer on lon/lat is planar.
+
+from pyspark.sql.types import StructType, StructField, LongType, BinaryType
+import pandas as pd
+from typing import Iterator
+from shapely import wkb as shp_wkb
+
+
+def morphology_partition(pdfs: Iterator[pd.DataFrame]) -> Iterator[pd.DataFrame]:
+    for pdf in pdfs:
+        out_ids: list[int] = []
+        out_wkbs: list[bytes] = []
+        for _, row in pdf.iterrows():
+            raw = bytes(row["geom_wkb"])
+            r   = float(row["morphology_radius"] or 0.0)
+            tol = float(row["simplify_tolerance"] or 0.0)
+            try:
+                g = shp_wkb.loads(raw)
+                if r > 0:
+                    g = g.buffer(-r).buffer(2 * r).buffer(-r)
+                if tol > 0:
+                    g = g.simplify(tol, preserve_topology=True)
+                out = shp_wkb.dumps(g, hex=False)
+            except Exception:
+                # Defensive: invalid geometry, antimeridian artefacts, etc.
+                # Fall back to the raw geometry so the row isn't lost.
+                out = raw
+            out_ids.append(int(row["shape_id"]))
+            out_wkbs.append(out)
+        yield pd.DataFrame({"shape_id": out_ids, "geom_simplified_wkb": out_wkbs})
+
+
+simp_schema = StructType([
+    StructField("shape_id", LongType()),
+    StructField("geom_simplified_wkb", BinaryType()),
+])
+
+shapes_in = (
+    spark.table(table)
+    .selectExpr(
+        "shape_id",
+        "ST_AsBinary(geom) AS geom_wkb",
+        "morphology_radius",
+        "simplify_tolerance",
+    )
+    .repartition(64, "shape_id")  # explicit, not a hint — AQE can't undo it
+)
+
+simplified = shapes_in.mapInPandas(morphology_partition, schema=simp_schema)
+
+staging_tbl = f"{table}__simplified_staging"
+simplified.write.format("delta").mode("overwrite").saveAsTable(staging_tbl)
+
+spark.sql(f"""
+MERGE INTO {table} AS s
+USING {staging_tbl} AS m
+  ON s.shape_id = m.shape_id
+WHEN MATCHED THEN UPDATE SET
+  s.geom_simplified = ST_GeomFromWKB(m.geom_simplified_wkb, 4326)
+""")
+
+spark.sql(f"DROP TABLE {staging_tbl}")
+
 # wkb_bytes reflects what build_shape_cells will actually tessellate —
-# applies the per-shape simplify_tolerance via the same CASE the build uses.
-# Quarantine acts on this post-simplify size so a shape with aggressive
-# tolerance (e.g. ocean_basin 0.1°) gets a fair chance even if its raw
-# WKB is huge.
+# always the geom_simplified column from here on. Quarantine acts on this
+# post-simplify size so a shape with aggressive tolerance / morphology
+# gets a fair chance even if its raw WKB is huge.
 spark.sql(f"""
 UPDATE {table}
-SET wkb_bytes = octet_length(ST_AsBinary(
-  CASE WHEN coalesce(simplify_tolerance, 0) > 0
-       THEN ST_Simplify(geom, simplify_tolerance)
-       ELSE geom
-  END
-))
+SET wkb_bytes = octet_length(ST_AsBinary(coalesce(geom_simplified, geom)))
 """)
 
 spark.sql(f"""

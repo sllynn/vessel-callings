@@ -1,0 +1,25 @@
+# Dependencies — installed locally via `npm install`
+node_modules/
+
+# Parcel build cache — rebuilt on demand
+.parcel-cache/
+
+# Build output — rebuilt by `npm run build` before each deploy
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local env overrides
+.env
+.env.local
+.env.*.local
+
+# OS / editor cruft
+.DS_Store
+*.swp
+.idea/
+.vscode/

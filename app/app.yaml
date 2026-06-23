@@ -1,0 +1,40 @@
+display_name: Clarksons Vessel Callings
+description: |
+  Live visualisation of the vessel-callings pipeline:
+  live AIS positions, open callings, calling Gantt, bitemporal as-of replay.
+  Queries run on-behalf-of the logged-in user against the SQL Warehouse.
+
+command:
+  - "python"
+  - "-m"
+  - "uvicorn"
+  - "app:app"
+  - "--host"
+  - "0.0.0.0"
+  - "--port"
+  - "8000"
+
+# OBO user authorization — the Apps platform forwards the user's OAuth token
+# as `X-Forwarded-Access-Token` on every request. The backend uses that token
+# to authenticate to the SQL Warehouse, so queries run as the user and UC
+# enforces their grants.
+user_authorization:
+  scopes:
+    - sql
+    - iam:current-user:read
+
+# The app's service principal needs CAN_USE on the warehouse for the routing
+# layer (even though the actual queries authenticate as the user).
+resources:
+  - name: sql-warehouse
+    sql_warehouse:
+      id: 994009ac5de169d0  # Serverless Starter on sme workspace
+      permission: CAN_USE
+
+env:
+  - name: DATABRICKS_WAREHOUSE_ID
+    value: "994009ac5de169d0"
+  - name: CLARKSONS_CATALOG
+    value: "geo_sme_emea_catalog"
+  - name: CLARKSONS_SCHEMA
+    value: "clarksons"

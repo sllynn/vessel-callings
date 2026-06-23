@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+uv.lock.bak
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Build artefacts — frontend/dist is deployed and must NOT be ignored
+# frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Databricks
+.databricks/
+
+# OS
+.DS_Store

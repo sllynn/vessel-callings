@@ -42,15 +42,12 @@ WITH safe_shapes AS (
     shape_id,
     target_res,
     simplify_tolerance,
-    -- simplify_tolerance is populated by pick_target_res from the
-    -- per-category map. Tolerance scales with target_res — coarser cells
-    -- can absorb stronger simplification with no visible boundary change.
-    ST_AsBinary(
-      CASE WHEN coalesce(simplify_tolerance, 0) > 0
-           THEN ST_Simplify(geom, simplify_tolerance)
-           ELSE geom
-      END
-    ) AS geom_wkb
+    -- geom_simplified is the morphologically-opened-and-closed, lightly
+    -- DP-simplified outline computed in pick_target_res — single source
+    -- of truth shared with the app's /shapes/outlines endpoint. Fall
+    -- back to raw geom if it hasn't been populated yet (e.g. running
+    -- against an older shape_index materialisation).
+    ST_AsBinary(coalesce(geom_simplified, geom)) AS geom_wkb
   FROM {shapes}
   WHERE tessellation_safe
     AND NOT coalesce(tessellation_quarantine, false)
