@@ -77,7 +77,7 @@ variables:
     default: "7"
   max_runtime_minutes:
     description: Wall-clock cap on the long-running generator job
-    default: "240"
+    default: "1440"
   reset_state:
     description: When true, streaming notebooks drop their target tables and clear checkpoints on startup
     default: "false"

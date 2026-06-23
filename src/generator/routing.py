@@ -53,6 +53,13 @@ class RouteCache:
             return leg
         gj: dict[str, Any] = sr.searoute(origin, destination, units="km")
         waypoints = [(c[0], c[1]) for c in gj["geometry"]["coordinates"]]
+        # searoute occasionally returns a degenerate result (single waypoint,
+        # or in rare cases zero) for very close or coincident endpoints —
+        # producing a Leg the stepper's interpolation can't index into.
+        # Fall back to a straight origin → destination two-point leg so the
+        # invariant `len(waypoints) >= 2` always holds.
+        if len(waypoints) < 2:
+            waypoints = [origin, destination]
         # Build cumulative arc-length so we can interpolate by km.
         cum_km = [0.0]
         for i in range(1, len(waypoints)):
