@@ -13,7 +13,7 @@ import os
 import shutil
 
 dbutils.widgets.text("catalog", "stuart")
-dbutils.widgets.text("schema", "clarksons")
+dbutils.widgets.text("schema", "marineintel")
 dbutils.widgets.text("volume", "landing")
 dbutils.widgets.text("workspace_files_path", "")
 

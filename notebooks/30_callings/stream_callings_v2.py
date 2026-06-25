@@ -28,7 +28,7 @@
 # COMMAND ----------
 
 dbutils.widgets.text("catalog", "stuart")
-dbutils.widgets.text("schema", "clarksons")
+dbutils.widgets.text("schema", "marineintel")
 dbutils.widgets.text("merge_trigger_seconds", "30")
 dbutils.widgets.text("retraction_window_days", "7")
 dbutils.widgets.dropdown("reset_state", "false", ["false", "true"])

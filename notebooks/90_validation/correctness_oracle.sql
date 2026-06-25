@@ -11,7 +11,7 @@
 -- COMMAND ----------
 
 CREATE WIDGET TEXT catalog DEFAULT 'stuart';
-CREATE WIDGET TEXT schema DEFAULT 'clarksons_demo';
+CREATE WIDGET TEXT schema DEFAULT 'marineintel_demo';
 CREATE WIDGET TEXT sample_n DEFAULT '10000';
 
 -- COMMAND ----------

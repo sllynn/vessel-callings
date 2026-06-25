@@ -1,4 +1,4 @@
-# Clarksons Vessel-Callings Demo
+# MarineIntel Vessel-Callings Demo
 
 A Databricks Asset Bundle implementing the streaming vessel-callings architecture
 from the AR-000117956 research brief: H3-indexed shapes via `h3_tessellateaswkb`,
@@ -208,7 +208,7 @@ Edit the `variables:` block to match the target environment:
 | Variable | Default (Stuart's dev) | What to set in customer env |
 |---|---|---|
 | `catalog` | `stuart` | A UC catalog you own |
-| `schema` | `clarksons` | A schema in that catalog |
+| `schema` | `marineintel` | A schema in that catalog |
 | `volume` | `landing` | UC volume name (we create it) |
 | `cluster_id` | `0519-163942-gq1rcl9r` | ID of your dev cluster |
 | `n_vessels` | `500` | Fleet size; 100–2 000 is comfortable on 2 workers |
@@ -272,7 +272,7 @@ databricks bundle validate -t dev -p <profile>
 databricks bundle deploy -t dev -p <profile>
 ```
 
-After this you'll see ten jobs in the workspace prefixed `[clarksons-demo]`:
+After this you'll see ten jobs in the workspace prefixed `[marineintel-demo]`:
 
 | Job key | Notebook | Mode |
 |---|---|---|
@@ -366,11 +366,11 @@ from the top.
 ## Stop everything
 
 ```bash
-# Cancel all active clarksons-demo runs
+# Cancel all active marineintel-demo runs
 databricks jobs list-runs -p <profile> --active-only -o json | python3 -c "
 import sys, json
 for r in json.load(sys.stdin):
-    if 'clarksons-demo' in (r.get('run_name','') or ''):
+    if 'marineintel-demo' in (r.get('run_name','') or ''):
         print(r.get('run_id'))" | xargs -I{} databricks jobs cancel-run {} -p <profile>
 ```
 
@@ -432,7 +432,7 @@ This deletes the schema, volume, and all the streaming tables. The static
 ## Project layout
 
 ```
-clarksons-demo/
+marineintel-demo/
 ├── README.md                      ← this file
 ├── BRIEF.md                       ← design rationale + decisions log
 ├── databricks.yml                 ← bundle root: variables, targets, includes

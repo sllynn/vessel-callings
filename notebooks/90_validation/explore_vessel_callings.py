@@ -32,7 +32,7 @@ from shapely import wkb
 from shapely.geometry import LineString, Point
 
 dbutils.widgets.text("catalog", "stuart")
-dbutils.widgets.text("schema", "clarksons")
+dbutils.widgets.text("schema", "marineintel")
 dbutils.widgets.text("vessel_id", "v-000028")
 dbutils.widgets.text("simplify_deg", "0.02")
 

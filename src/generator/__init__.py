@@ -1,4 +1,4 @@
-"""Synthetic AIS generator for the Clarksons vessel-callings demo.
+"""Synthetic AIS generator for the MarineIntel vessel-callings demo.
 
 Layers (per BRIEF.md §4.1):
 - world.py    — ports manifest + world geography (EEZs for fishing bounds)

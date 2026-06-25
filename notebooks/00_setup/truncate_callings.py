@@ -12,7 +12,7 @@
 import json
 
 dbutils.widgets.text("catalog", "stuart")
-dbutils.widgets.text("schema", "clarksons")
+dbutils.widgets.text("schema", "marineintel")
 
 catalog = dbutils.widgets.get("catalog")
 schema = dbutils.widgets.get("schema")

@@ -16,8 +16,8 @@ from fastapi import Request, HTTPException
 
 IS_DATABRICKS_APP = bool(os.environ.get("DATABRICKS_APP_NAME"))
 
-CATALOG = os.environ.get("CLARKSONS_CATALOG", "geo_sme_emea_catalog")
-SCHEMA  = os.environ.get("CLARKSONS_SCHEMA",  "clarksons")
+CATALOG = os.environ.get("MARINEINTEL_CATALOG", "geo_sme_emea_catalog")
+SCHEMA  = os.environ.get("MARINEINTEL_SCHEMA",  "marineintel")
 
 
 def workspace_host() -> str:

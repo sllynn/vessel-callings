@@ -1,5 +1,5 @@
 {
-  "cluster_name": "Clarksons demo - stuart.lynn",
+  "cluster_name": "MarineIntel demo - stuart.lynn",
   "spark_version": "18.2.x-scala2.13",
   "runtime_engine": "PHOTON",
   "data_security_mode": "SINGLE_USER",
@@ -23,6 +23,6 @@
   },
   "custom_tags": {
     "owner": "stuart.lynn@databricks.com",
-    "project": "clarksons-demo"
+    "project": "marineintel-demo"
   }
 }

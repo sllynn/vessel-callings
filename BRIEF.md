@@ -1,11 +1,11 @@
-# Clarksons Vessel-Callings Demo — Project Brief
+# MarineIntel Vessel-Callings Demo — Project Brief
 
-**Customer:** Clarksons Research (subsidiary of Clarksons Plc)
+**Customer:** MarineIntel Research (subsidiary of MarineIntel Plc)
 **ASQ:** AR-000117956 — Unblock New Workloads
 **Owner (SSA):** Stuart Lynn
 **Cloud:** Azure Databricks
 **Status:** Drafting demo scope · 2026-05-19
-**Source notes:** `~/Documents/obsidian/Clarksons Pl - AR-000117956 - Unblock New Workloads.md`
+**Source notes:** `~/Documents/obsidian/MarineIntel Pl - AR-000117956 - Unblock New Workloads.md`
 
 ---
 
@@ -15,7 +15,7 @@ Produce a runnable, parameterised, asset-bundle-packaged demo of the vessel-call
 architecture sketched in the AR-000117956 research brief and validated on the
 13 May discovery call. The artefact has two audiences:
 
-1. **Clarksons Research engineers** (Chris, Luke, Leander) — a working reference
+1. **MarineIntel Research engineers** (Chris, Luke, Leander) — a working reference
    they can lift, adapt, and grow into the production implementation. They start
    from a low Databricks maturity baseline, so the demo doubles as enablement.
 2. **The 02 June QBR audience** (sponsored by David Whicker) — a credibility
@@ -62,7 +62,7 @@ Out of scope (for the MVP — flagged for follow-on):
 A single Databricks Asset Bundle, deployed to Azure Databricks. Notional layout:
 
 ```
-clarksons-demo/
+marineintel-demo/
 ├── databricks.yml                       # bundle definition + targets (dev / qbr)
 ├── requirements.txt                     # top-level deps, pinned to latest
 ├── requirements.lock                    # uv pip compile output; cluster installs from this
@@ -117,9 +117,9 @@ those widgets as job parameters in `databricks.yml`.
 
 | Widget | Default (dev) | Used by |
 |---|---|---|
-| `catalog` | `clarksons_demo` | all |
+| `catalog` | `marineintel_demo` | all |
 | `schema` | `vessel_callings` | all |
-| `volume` | `/Volumes/clarksons_demo/vessel_callings/landing` | replay, shapes |
+| `volume` | `/Volumes/marineintel_demo/vessel_callings/landing` | replay, shapes |
 | `target_res_strategy` | `category` (alt: `area`) | `pick_target_res.sql` |
 | `position_res` | `10` | `index_positions.sql` (finest target_res in demo) |
 | `seed` | `20260519` | `generate_ais.py` (deterministic output) |
@@ -279,7 +279,7 @@ Atlantic transits, and Mediterranean approach via Gibraltar are the
 obvious set. This is also a nice tonal fit — the customer is a London
 firm with deep North-Sea / European-shipping context.
 
-**Customer port/berth data — slot left open.** When Clarksons want to see
+**Customer port/berth data — slot left open.** When MarineIntel want to see
 their own berth or port shapes flow through the same pipeline, the
 `shapes_raw` table is a one-row-per-shape insert. The `target_res`
 strategy widget already accommodates whichever resolution they pick. We
@@ -437,7 +437,7 @@ benchmarked.
 > in **§5.1** below. The demo-day MVP (in
 > `notebooks/30_callings/stream_callings.py`) still uses the gap-threshold
 > heuristic described above; §5.1 is the agreed follow-on shape for the
-> Clarksons customer team after the customer rejected the gap-threshold
+> MarineIntel customer team after the customer rejected the gap-threshold
 > heuristic in the demo prep review on 2026-05-22.
 
 ## 5.1 Streaming MERGE refinement — gaps-and-islands derivation
@@ -688,7 +688,7 @@ vessel_lookback AS (
 ```
 
 **Recommended default: `retraction_window = 7 days`** for production at
-Clarksons scale. Smaller windows mean cheaper batches but tighter
+MarineIntel scale. Smaller windows mean cheaper batches but tighter
 late-correction guarantees; larger windows go the other way. Tuning
 knob — likely worth a customer conversation once they see real
 late-arrival distributions in their AIS feed.

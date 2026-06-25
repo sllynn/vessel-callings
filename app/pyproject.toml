@@ -1,5 +1,5 @@
 [project]
-name = "clarksons-vessel-callings"
+name = "marineintel-vessel-callings"
 version = "0.1.0"
 description = "Databricks App: live vessel-callings visualisation"
 requires-python = ">=3.11"
@@ -23,6 +23,12 @@ package = false
 # isolation for this package lets the build use our project-level
 # setuptools/wheel pins above.
 no-build-isolation-package = ["thrift"]
+# The cloud pypi proxy blocks package versions released within the last
+# 7 days (supply-chain hardening), 404-ing their wheels in the Apps build
+# runtime. Pin resolution to versions released before a cutoff well past
+# that window so every locked version is old enough for the proxy to
+# serve. Bump this date forward when you deliberately want newer deps.
+exclude-newer = "2026-06-15T00:00:00Z"
 
 # Use the supply-chain-safe production pypi proxy (mirrors the npm one).
 # The legacy `pypi-proxy.dev.databricks.com` proxy is flaky from inside

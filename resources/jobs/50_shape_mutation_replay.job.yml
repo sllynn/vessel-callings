@@ -1,7 +1,7 @@
 resources:
   jobs:
     shape_mutation_replay:
-      name: "[clarksons-demo] 50 shape mutation replay"
+      name: "[marineintel-demo] 50 shape mutation replay"
       description: |
         Demo helper: at a scheduled sim-time, rewrite a chosen shape (expand
         an ATBA, redraw a TSS lane). Drives the CDF-fed window recompute on

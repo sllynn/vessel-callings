@@ -1,7 +1,7 @@
 resources:
   jobs:
     shape_index:
-      name: "[clarksons-demo] 10 shape index"
+      name: "[marineintel-demo] 10 shape index"
       description: |
         Build the shape_cells table via h3_tessellateaswkb against shapes_raw.
         Per-shape target_res chosen by `target_res_strategy` (category or area).

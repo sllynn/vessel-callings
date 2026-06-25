@@ -5,8 +5,8 @@ from fastapi.staticfiles import StaticFiles
 from server.routes import positions, callings, shapes
 
 app = FastAPI(
-    title="Clarksons Vessel Callings",
-    description="Live vessel-callings visualisation over geo_sme_emea_catalog.clarksons",
+    title="MarineIntel Vessel Callings",
+    description="Live vessel-callings visualisation over geo_sme_emea_catalog.marineintel",
 )
 
 app.include_router(positions.router)

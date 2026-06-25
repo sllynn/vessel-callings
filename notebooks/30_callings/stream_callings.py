@@ -20,7 +20,7 @@
 # COMMAND ----------
 
 dbutils.widgets.text("catalog", "stuart")
-dbutils.widgets.text("schema", "clarksons")
+dbutils.widgets.text("schema", "marineintel")
 dbutils.widgets.text("merge_trigger_seconds", "30")
 dbutils.widgets.text("gap_minutes", "5")
 dbutils.widgets.dropdown("bitemporal", "true", ["true", "false"])

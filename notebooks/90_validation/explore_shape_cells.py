@@ -34,7 +34,7 @@ from shapely import wkb
 from shapely.geometry import Polygon
 
 dbutils.widgets.text("catalog", "stuart")
-dbutils.widgets.text("schema", "clarksons")
+dbutils.widgets.text("schema", "marineintel")
 dbutils.widgets.text(
     "name_filter",
     "United Kingdom|Dover|Casquets|Scilly|Shetland|Orkney|North Atlantic|North Sea|Norwegian|Irish|French|German",

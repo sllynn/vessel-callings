@@ -1,8 +1,8 @@
-# Clarksons Vessel Callings — Databricks App
+# MarineIntel Vessel Callings — Databricks App
 
 Live visualisation of the vessel-callings pipeline. React + Parcel + deck.gl
 + MapLibre frontend, FastAPI backend, queries via the `databricks-sql-connector`
-against `geo_sme_emea_catalog.clarksons.*` on the **sme** workspace.
+against `geo_sme_emea_catalog.marineintel.*` on the **sme** workspace.
 
 Authentication is **on-behalf-of (OBO) user-to-machine** — queries run as
 the logged-in user, UC enforces their grants.
@@ -37,8 +37,8 @@ cd app
 uv sync                                       # creates .venv, installs deps
 DATABRICKS_PROFILE=sme \
 DATABRICKS_WAREHOUSE_ID=994009ac5de169d0 \
-CLARKSONS_CATALOG=geo_sme_emea_catalog \
-CLARKSONS_SCHEMA=clarksons \
+MARINEINTEL_CATALOG=geo_sme_emea_catalog \
+MARINEINTEL_SCHEMA=marineintel \
 uv run uvicorn app:app --reload --port 8000
 
 # Frontend (separate terminal)
@@ -56,7 +56,7 @@ run as you, against the real warehouse.
 
 ```bash
 # One-time, before the first deploy
-databricks apps create clarksons-vessel-callings \
+databricks apps create marineintel-vessel-callings \
   --description "Live vessel-callings visualisation" -p sme
 
 # Build the frontend — this writes to frontend/dist/ which is committed
@@ -67,7 +67,7 @@ cd app/frontend && npm run build && cd ..
 # `databricks sync` honours .gitignore, so anything in there is excluded
 # automatically — and conversely, frontend/dist/ MUST stay un-ignored or
 # the workspace won't have the static assets the FastAPI app serves.
-databricks sync . /Workspace/Users/stuart.lynn@databricks.com/clarksons-vessel-callings \
+databricks sync . /Workspace/Users/stuart.lynn@databricks.com/marineintel-vessel-callings \
   --exclude node_modules \
   --exclude .venv \
   --exclude __pycache__ \
@@ -76,12 +76,12 @@ databricks sync . /Workspace/Users/stuart.lynn@databricks.com/clarksons-vessel-c
   -p sme --full
 
 # Deploy
-databricks apps deploy clarksons-vessel-callings \
-  --source-code-path /Workspace/Users/stuart.lynn@databricks.com/clarksons-vessel-callings \
+databricks apps deploy marineintel-vessel-callings \
+  --source-code-path /Workspace/Users/stuart.lynn@databricks.com/marineintel-vessel-callings \
   -p sme
 
 # Get the app URL
-databricks apps get clarksons-vessel-callings -p sme
+databricks apps get marineintel-vessel-callings -p sme
 ```
 
 After the first deploy:
@@ -89,9 +89,9 @@ After the first deploy:
 1. Open the app URL — the consent screen asks the user to grant the
    `sql` and `iam:current-user:read` scopes.
 2. Confirm the SQL Warehouse resource binding under
-   **Compute → Apps → clarksons-vessel-callings → Edit**.
+   **Compute → Apps → marineintel-vessel-callings → Edit**.
 3. Each user needs `USE CATALOG geo_sme_emea_catalog`, `USE SCHEMA
-   clarksons`, `SELECT` on the relevant tables, and `CAN_USE` on the
+   marineintel`, `SELECT` on the relevant tables, and `CAN_USE` on the
    warehouse, granted via UC. For internal demo this is just you and
    anyone you share it with.
 

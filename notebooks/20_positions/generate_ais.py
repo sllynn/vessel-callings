@@ -26,7 +26,7 @@ dbutils.library.restartPython()
 # COMMAND ----------
 
 dbutils.widgets.text("catalog", "stuart")
-dbutils.widgets.text("schema", "clarksons")
+dbutils.widgets.text("schema", "marineintel")
 dbutils.widgets.text("seed", "20260519")
 dbutils.widgets.text("n_vessels", "500")
 dbutils.widgets.text("sim_speedup", "60")

@@ -13,7 +13,7 @@
 # COMMAND ----------
 
 dbutils.widgets.text("catalog", "stuart")
-dbutils.widgets.text("schema", "clarksons")
+dbutils.widgets.text("schema", "marineintel")
 dbutils.widgets.text("volume", "landing")
 dbutils.widgets.text("position_res", "8")
 dbutils.widgets.text("trigger_seconds", "30")

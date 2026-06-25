@@ -3,7 +3,7 @@ resources:
     vessel_callings:
       catalog_name: ${var.catalog}
       name: ${var.schema}
-      comment: Clarksons vessel-callings demo — shapes, positions, callings.
+      comment: MarineIntel vessel-callings demo — shapes, positions, callings.
 
   volumes:
     landing:

@@ -21,7 +21,7 @@ dbutils.library.restartPython()
 import json
 
 dbutils.widgets.text("catalog", "stuart")
-dbutils.widgets.text("schema", "clarksons")
+dbutils.widgets.text("schema", "marineintel")
 dbutils.widgets.dropdown("target_res_strategy", "category", ["category", "area"])
 dbutils.widgets.text("quarantine_wkb_bytes", "500000")
 

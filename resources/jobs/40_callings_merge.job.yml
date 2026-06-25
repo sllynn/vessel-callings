@@ -1,7 +1,7 @@
 resources:
   jobs:
     truncate_callings:
-      name: "[clarksons-demo] 00 truncate_callings (one-shot)"
+      name: "[marineintel-demo] 00 truncate_callings (one-shot)"
       description: Empties callings_gold and position_shape_matches without touching their schemas or the streaming checkpoint.
       tasks:
         - task_key: truncate_callings
@@ -13,7 +13,7 @@ resources:
               schema: ${var.schema}
 
     reset_streaming_state:
-      name: "[clarksons-demo] 00 reset_streaming_state (one-shot)"
+      name: "[marineintel-demo] 00 reset_streaming_state (one-shot)"
       description: Drops bronze/silver/matches/callings tables and clears all streaming checkpoints. Static shapes_raw/shape_cells are untouched.
       tasks:
         - task_key: reset_streaming_state
@@ -26,7 +26,7 @@ resources:
               volume: ${var.volume}
 
     check_status:
-      name: "[clarksons-demo] 90 check_status (one-shot)"
+      name: "[marineintel-demo] 90 check_status (one-shot)"
       description: One-shot probe of bronze/silver/matches/callings row counts and event-time freshness.
       tasks:
         - task_key: check_status
@@ -39,7 +39,7 @@ resources:
               volume: ${var.volume}
 
     callings_merge_v2:
-      name: "[clarksons-demo] 40 callings MERGE v2 (gaps-and-islands)"
+      name: "[marineintel-demo] 40 callings MERGE v2 (gaps-and-islands)"
       description: |
         §5.1 of BRIEF.md — gaps-and-islands streaming MERGE. No gap_seconds
         heuristic. Observational closure: exit_ts is set only when we
@@ -58,7 +58,7 @@ resources:
               reset_state: ${var.reset_state}
 
     callings_merge:
-      name: "[clarksons-demo] 40 callings MERGE (streaming)"
+      name: "[marineintel-demo] 40 callings MERGE (streaming)"
       description: |
         Streaming foreachBatch over silver_positions. Each micro-batch:
         ancestor-expand → equi-join shape_cells → chip-refine boundary cells

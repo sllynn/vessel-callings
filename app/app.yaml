@@ -1,4 +1,4 @@
-display_name: Clarksons Vessel Callings
+display_name: MarineIntel Vessel Callings
 description: |
   Live visualisation of the vessel-callings pipeline:
   live AIS positions, open callings, calling Gantt, bitemporal as-of replay.
@@ -34,7 +34,7 @@ resources:
 env:
   - name: DATABRICKS_WAREHOUSE_ID
     value: "994009ac5de169d0"
-  - name: CLARKSONS_CATALOG
+  - name: MARINEINTEL_CATALOG
     value: "geo_sme_emea_catalog"
-  - name: CLARKSONS_SCHEMA
-    value: "clarksons"
+  - name: MARINEINTEL_SCHEMA
+    value: "marineintel"

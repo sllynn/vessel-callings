@@ -1,7 +1,7 @@
 resources:
   jobs:
     position_index:
-      name: "[clarksons-demo] 30 position index (streaming)"
+      name: "[marineintel-demo] 30 position index (streaming)"
       description: |
         Continuous streaming pipeline: Auto Loader from landing volume into
         bronze_ais_positions, then enrich into silver_positions with

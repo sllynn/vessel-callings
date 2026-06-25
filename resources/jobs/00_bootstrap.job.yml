@@ -1,7 +1,7 @@
 resources:
   jobs:
     bootstrap:
-      name: "[clarksons-demo] 00 bootstrap"
+      name: "[marineintel-demo] 00 bootstrap"
       description: |
         One-shot setup: copy raw shape parquet files from local data/ into
         the landing volume, create the unified shapes_raw table, ingest the

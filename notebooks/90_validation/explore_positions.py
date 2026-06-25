@@ -38,7 +38,7 @@ from shapely import wkb
 from shapely.geometry import LineString, Point, Polygon
 
 dbutils.widgets.text("catalog", "stuart")
-dbutils.widgets.text("schema", "clarksons")
+dbutils.widgets.text("schema", "marineintel")
 dbutils.widgets.text("volume", "landing")
 dbutils.widgets.text("n_vessels", "30")  # cap to keep folium HTML in one cell
 dbutils.widgets.text("bbox", "-15,45,15,65")  # xmin,ymin,xmax,ymax — UK & near neighbours

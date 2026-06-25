@@ -11,7 +11,7 @@
 # COMMAND ----------
 
 dbutils.widgets.text("catalog", "stuart")
-dbutils.widgets.text("schema", "clarksons_demo")
+dbutils.widgets.text("schema", "marineintel_demo")
 dbutils.widgets.text("shape_id", "")          # empty = let the notebook pick
 dbutils.widgets.text("mutation", "expand_atba")  # expand_atba | shrink_tss | redraw_eez
 

@@ -1,5 +1,5 @@
 bundle:
-  name: clarksons-demo
+  name: marineintel-demo
 
 include:
   - resources/*.yml
@@ -12,7 +12,7 @@ variables:
     default: geo_sme_emea_catalog
   schema:
     description: Schema under the catalog
-    default: clarksons
+    default: marineintel
   volume:
     description: UC Volume name for landing files (AIS landing, raw shape parquet)
     default: landing
@@ -99,7 +99,7 @@ targets:
     default: true
     # Deliberately NOT using `mode: development` — its dev-mode mutator
     # prefixes every resource with [dev <user>] / dev_<user>_, and we want
-    # the bare schema `clarksons` under geo_sme_emea_catalog.
+    # the bare schema `marineintel` under geo_sme_emea_catalog.
     workspace:
       host: https://fevm-geo-sme-emea.cloud.databricks.com
     run_as:
@@ -107,13 +107,13 @@ targets:
     presets:
       tags:
         owner: stuart.lynn@databricks.com
-        project: clarksons-demo
+        project: marineintel-demo
 
   # placeholder for the formal QBR target; currently identical to dev
   qbr:
     mode: production
     workspace:
       host: https://adb-984752964297111.11.azuredatabricks.net
-      root_path: /Workspace/Shared/clarksons-demo/qbr
+      root_path: /Workspace/Shared/marineintel-demo/qbr
     run_as:
       user_name: stuart.lynn@databricks.com
