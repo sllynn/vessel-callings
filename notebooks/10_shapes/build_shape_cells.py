@@ -58,19 +58,32 @@ SELECT
   s.target_res,
   t.cellid AS cell,
   t.core,
-  -- Buffer boundary chips outward by `simplify_tolerance / 10` to close
-  -- the planar/spheroidal seam between adjacent cells. h3_tessellateaswkb
-  -- computes chips spheroidally and stores them as planar WKB; at large
-  -- cell sizes the straight-line approximation of cell edges retreats
-  -- inside the true spheroidal edge, leaving thin "no-chip" strips at
-  -- every cell boundary that valid points can land in. A 1/10-tolerance
-  -- buffer (~1.1 km for res-2 ocean basins, ~110 m for res-5 EEZs)
-  -- overlaps adjacent chips just enough to bridge those strips.
+  -- Boundary-chip buffering, clipped back to the polygon.
+  --
+  -- h3_tessellateaswkb computes chips spheroidally and stores them as
+  -- planar WKB; at large cell sizes the straight-line approximation of an
+  -- H3 cell edge retreats inside the true spheroidal edge, leaving thin
+  -- "no-chip" strips at every cell boundary that valid points can land in.
+  -- Buffering the chip outward by `simplify_tolerance / 10` (~1.1 km for
+  -- res-2 ocean basins, ~110 m for res-5 EEZs) bridges those strips.
+  --
+  -- But a plain outward buffer also pushes the chip OUT across the shape's
+  -- own boundary, so points just outside the coastline / EEZ edge would
+  -- falsely match. So we intersect the buffered chip back with the source
+  -- polygon (`geom_wkb` — the same geometry we tessellated): the H3 hex
+  -- edges, being interior to the polygon, keep their outward buffer and
+  -- the seam stays closed, while the polygon-boundary edges of the chip
+  -- snap back exactly to the true shape outline.
   CASE
     WHEN NOT t.core
      AND t.chip IS NOT NULL
      AND coalesce(s.simplify_tolerance, 0) > 0
-    THEN ST_AsBinary(ST_Buffer(ST_GeomFromWKB(t.chip, 4326), s.simplify_tolerance / 10))
+    THEN ST_AsBinary(
+           ST_Intersection(
+             ST_Buffer(ST_GeomFromWKB(t.chip, 4326), s.simplify_tolerance / 10),
+             ST_GeomFromWKB(s.geom_wkb, 4326)
+           )
+         )
     ELSE t.chip
   END AS chip_wkb
 FROM safe_shapes s
