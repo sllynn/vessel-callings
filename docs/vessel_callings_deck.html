@@ -461,9 +461,9 @@
       <line x1="202" y1="48" x2="228" y2="48" stroke="rgba(0,194,199,0.5)" stroke-width="1.5" stroke-dasharray="4,3"/>
       <polygon points="226,44 234,48 226,52" fill="rgba(0,194,199,0.5)"/>
 
-      <!-- Arrow from shape_cells down to join (diagonal toward positions box) -->
-      <line x1="320" y1="78" x2="440" y2="200" stroke="rgba(0,194,199,0.3)" stroke-width="1.5" stroke-dasharray="4,3"/>
-      <polygon points="436,196 440,205 444,196" fill="rgba(0,194,199,0.3)"/>
+      <!-- Arrow from shape_cells down to join box (now in gap) -->
+      <line x1="320" y1="76" x2="320" y2="86" stroke="rgba(0,194,199,0.5)" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <polygon points="316,84 320,92 324,84" fill="rgba(0,194,199,0.5)"/>
 
       <!-- POSITIONS LANE (bottom) -->
       <!-- Box 1: Azure Event Hubs -->
@@ -508,11 +508,12 @@
       <line x1="688" y1="172" x2="702" y2="172" stroke="rgba(54,232,176,0.5)" stroke-width="1.5"/>
       <polygon points="700,168 708,172 700,176" fill="rgba(54,232,176,0.5)"/>
 
-      <!-- Join indicator -->
-      <rect x="426" y="210" width="210" height="32" rx="6" fill="rgba(0,194,199,0.1)" stroke="rgba(0,194,199,0.25)" stroke-width="1"/>
-      <text x="531" y="231" text-anchor="middle" fill="#00c2c7" font-size="11" font-family="Consolas,monospace">JOIN ON (cell, target_res)</text>
-      <line x1="436" y1="200" x2="460" y2="210" stroke="rgba(0,194,199,0.3)" stroke-width="1" stroke-dasharray="3,2"/>
-      <line x1="531" y1="200" x2="531" y2="210" stroke="rgba(0,194,199,0.3)" stroke-width="1" stroke-dasharray="3,2"/>
+      <!-- Join indicator — sits in the gap between the Shapes and Positions lanes -->
+      <rect x="273" y="88" width="210" height="32" rx="6" fill="rgba(0,194,199,0.1)" stroke="rgba(0,194,199,0.25)" stroke-width="1"/>
+      <text x="378" y="109" text-anchor="middle" fill="#00c2c7" font-size="11" font-family="Consolas,monospace">JOIN ON (cell, target_res)</text>
+      <!-- Arrow from join box down to positions box -->
+      <line x1="436" y1="120" x2="436" y2="142" stroke="rgba(0,194,199,0.3)" stroke-width="1.5" stroke-dasharray="3,2"/>
+      <polygon points="432,140 436,146 440,140" fill="rgba(0,194,199,0.3)"/>
 
       <!-- Labels -->
       <text x="94" y="258" text-anchor="middle" fill="#4a6b8a" font-size="10" font-family="Segoe UI,sans-serif">Managed event stream</text>
@@ -877,30 +878,14 @@
     <h2>Live callings on a map</h2>
     <div class="cols-2" style="gap:32px;align-items:start">
       <div class="stack">
-        <div class="screenshot-placeholder">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-            <path d="M3 9h18M9 21V9"/>
-            <circle cx="15" cy="15" r="2"/>
-          </svg>
-          <span>Map view — add screenshot here</span>
-        </div>
+        <img src="assets/map_screenshot.png" style="width:100%;border-radius:12px;display:block;" alt="Live vessel callings map">
         <p style="font-size:.82rem">Live vessel tracks over the Dover Strait, overlaid on NOAA shipping lane data. Vessels simultaneously trigger callings against the TSS lane (res 8), the UK EEZ (res 5), and the North Atlantic (res 2).</p>
       </div>
       <div class="stack">
-        <div class="screenshot-placeholder">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M3 3h18v18H3z"/>
-            <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
-          </svg>
-          <span>Callings table / dashboard — add screenshot here</span>
-        </div>
+        <img src="assets/dashboard_screenshot.png" style="width:100%;border-radius:12px;display:block;" alt="Callings dashboard">
         <p style="font-size:.82rem">Lakeview dashboard showing open and recently closed callings. Entry/exit timestamps, n_positions, shape name and category. Filtered by vessel or zone in real time.</p>
       </div>
     </div>
-    <p style="font-size:.8rem;margin-top:20px;text-align:center;color:rgba(143,168,194,0.5)">
-      Screenshots to be added — front-end app runs as a Databricks App (deck.gl) or Lakeview dashboard
-    </p>
   </div>
 
   <!-- ══════════════════════════════════════════════
